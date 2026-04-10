@@ -21,6 +21,7 @@
 #include <tuple>
 
 #include "AABBTreeLines.hpp"
+#include "Algorithm/RegionExpansion.hpp"
 #include "BoundingBox.hpp"
 #include "BridgeDetector.hpp"
 #include "ClipperUtils.hpp"
@@ -785,6 +786,112 @@ ExtrusionPaths sort_extra_perimeters(const ExtrusionPaths& extra_perims, int ind
 
 #define EXTRA_PERIMETER_OFFSET_PARAMETERS ClipperLib::jtSquare, 0.
 // #define EXTRA_PERIM_DEBUG_FILES
+
+static Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons &anchoring, const coord_t seed_expansion)
+{
+    if (anchoring.empty())
+        return {};
+
+    Polylines seeds;
+    for (const Algorithm::WaveSeed &seed : Algorithm::wave_seeds(to_expolygons(anchoring), ExPolygons{boundary}, float(seed_expansion), true)) {
+        if (seed.boundary == 0 && seed.path.size() >= 2)
+            seeds.emplace_back(seed.path);
+    }
+
+    if (seeds.empty())
+        seeds = intersection_pl(to_polylines(boundary), offset(anchoring, float(seed_expansion), jtRound, 0.));
+
+    return seeds;
+}
+
+std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_wave_overhangs(ExPolygons               infill_area,
+                                                                          const Polygons          &lower_slices_polygons,
+                                                                          int                      perimeter_count,
+                                                                          const Flow              &overhang_flow,
+                                                                          double                   scaled_resolution,
+                                                                          const PrintObjectConfig & /* object_config */,
+                                                                          const PrintConfig       & /* print_config */)
+{
+    coord_t anchors_size    = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), overhang_flow.scaled_spacing() * (perimeter_count + 1));
+    coord_t seed_expansion  = std::max<coord_t>(1, overhang_flow.scaled_spacing() / 10);
+    coord_t trim_inset      = std::max<coord_t>(1, overhang_flow.scaled_width() / 2);
+    double  min_area_growth = 0.05 * double(overhang_flow.scaled_spacing()) * double(overhang_flow.scaled_spacing());
+
+    BoundingBox infill_area_bb = get_extents(infill_area).inflated(SCALED_EPSILON);
+    Polygons    optimized_lower_slices = ClipperUtils::clip_clipper_polygons_with_subject_bbox(lower_slices_polygons, infill_area_bb);
+    Polygons    overhangs              = diff(infill_area, optimized_lower_slices);
+
+    if (overhangs.empty())
+        return {};
+
+    Polygons anchors             = intersection(infill_area, optimized_lower_slices);
+    Polygons inset_anchors       = diff(anchors, expand(overhangs, anchors_size + 0.1 * overhang_flow.scaled_width(), EXTRA_PERIMETER_OFFSET_PARAMETERS));
+    Polygons inset_overhang_area = diff(infill_area, inset_anchors);
+
+    std::vector<ExtrusionPaths> wave_paths;
+    Polygons                    filled_area;
+
+    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+        Polygons overhang_to_cover = to_polygons(overhang);
+        Polygons real_overhang     = intersection(overhang_to_cover, overhangs);
+        if (real_overhang.empty())
+            continue;
+
+        Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * overhang_flow.scaled_spacing(), jtRound, 0.), inset_anchors);
+        Polylines seeds    = generate_wave_overhang_seeds(overhang, anchoring, seed_expansion);
+        if (seeds.empty())
+            continue;
+
+        Polygons trim_boundary = shrink(overhang_to_cover, trim_inset, jtRound, 0.);
+        if (trim_boundary.empty())
+            trim_boundary = shrink(overhang_to_cover, 0.1 * overhang_flow.scaled_spacing());
+        if (trim_boundary.empty())
+            trim_boundary = overhang_to_cover;
+
+        Polygons accumulated_region = intersection(offset(seeds, float(seed_expansion), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover);
+        if (accumulated_region.empty())
+            continue;
+
+        ExtrusionPaths &overhang_region = wave_paths.emplace_back();
+        double          accumulated_area = area(accumulated_region);
+
+        const size_t max_iterations = std::max<size_t>(
+            3,
+            size_t(std::ceil(get_extents(overhang_to_cover).radius() / std::max(1.0, double(overhang_flow.scaled_spacing())))) + 2);
+        for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
+            Polygons next_region = intersection(offset(accumulated_region, float(overhang_flow.scaled_spacing()), jtRound, 0.), overhang_to_cover);
+            if (next_region.empty())
+                break;
+
+            double next_area = area(next_region);
+            if (next_area <= accumulated_area + min_area_growth)
+                break;
+
+            Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
+            for (Polyline &front : fronts)
+                front.simplify(std::min(0.05 * overhang_flow.scaled_spacing(), scaled_resolution));
+            fronts.erase(std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }), fronts.end());
+            fronts = reconnect_polylines(fronts, overhang_flow.scaled_spacing());
+
+            if (! fronts.empty()) {
+                extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, overhang_flow });
+                append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
+            }
+
+            accumulated_region = std::move(next_region);
+            accumulated_area   = next_area;
+        }
+
+        overhang_region.erase(std::remove_if(overhang_region.begin(), overhang_region.end(),
+                                             [](const ExtrusionPath &path) { return path.empty(); }),
+                              overhang_region.end());
+        if (overhang_region.empty())
+            wave_paths.pop_back();
+    }
+
+    return { wave_paths, union_(filled_area) };
+}
+
 // Function will generate extra perimeters clipped over nonbridgeable areas of the provided surface and returns both the new perimeters and
 // Polygons filled by those clipped perimeters
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_extra_perimeters_over_overhangs(ExPolygons               infill_area,
@@ -985,6 +1092,26 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_extra_perimeters_over
     return {extra_perims, diff(inset_overhang_area, inset_overhang_area_left_unfilled)};
 }
 
+std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(ExPolygons               infill_area,
+                                                                              const Polygons          &lower_slices_polygons,
+                                                                              int                      perimeter_count,
+                                                                              const Flow              &overhang_flow,
+                                                                              double                   scaled_resolution,
+                                                                              const PrintObjectConfig &object_config,
+                                                                              const PrintConfig       &print_config,
+                                                                              bool                     use_wave_overhangs)
+{
+    if (use_wave_overhangs) {
+        auto [wave_paths, filled_area] = generate_wave_overhangs(
+            infill_area, lower_slices_polygons, perimeter_count, overhang_flow, scaled_resolution, object_config, print_config);
+        if (! wave_paths.empty())
+            return { std::move(wave_paths), std::move(filled_area) };
+    }
+
+    return generate_extra_perimeters_over_overhangs(
+        infill_area, lower_slices_polygons, perimeter_count, overhang_flow, scaled_resolution, object_config, print_config);
+}
+
 // Thanks, Cura developers, for implementing an algorithm for generating perimeters with variable width (Arachne) that is based on the paper
 // "A framework for adaptive width control of dense contour-parallel toolpaths in fused deposition modeling"
 void PerimeterGenerator::process_arachne(
@@ -1155,14 +1282,16 @@ void PerimeterGenerator::process_arachne(
             float(- min_perimeter_infill_spacing / 2.),
             float(inset + min_perimeter_infill_spacing / 2.));
 
-    if (lower_slices != nullptr && params.config.overhangs && params.config.extra_perimeters_on_overhangs &&
+    if (lower_slices != nullptr && params.config.overhangs &&
+        (params.config.extra_perimeters_on_overhangs || params.config.wave_overhangs) &&
         params.config.perimeters > 0 && params.layer_id > params.object_config.raft_layers) {
         // Generate extra perimeters on overhang areas, and cut them to these parts only, to save print time and material
-        auto [extra_perimeters, filled_area] = generate_extra_perimeters_over_overhangs(infill_areas,
-                                                                                        lower_slices_polygons_cache,
-                                                                                        loop_number + 1,
-                                                                                        params.overhang_flow, params.scaled_resolution,
-                                                                                        params.object_config, params.print_config);
+        auto [extra_perimeters, filled_area] = generate_overhang_toolpaths(infill_areas,
+                                                                           lower_slices_polygons_cache,
+                                                                           loop_number + 1,
+                                                                           params.overhang_flow, params.scaled_resolution,
+                                                                           params.object_config, params.print_config,
+                                                                           params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;
@@ -1523,14 +1652,16 @@ void PerimeterGenerator::process_classic(
         infill_areas = union_ex(infill_areas, offset_ex(top_infill_areas, float(infill_perimeter_overlap)));
     }
 
-    if (lower_slices != nullptr && params.config.overhangs && params.config.extra_perimeters_on_overhangs &&
+    if (lower_slices != nullptr && params.config.overhangs &&
+        (params.config.extra_perimeters_on_overhangs || params.config.wave_overhangs) &&
         params.config.perimeters > 0 && params.layer_id > params.object_config.raft_layers) {
         // Generate extra perimeters on overhang areas, and cut them to these parts only, to save print time and material
-        auto [extra_perimeters, filled_area] = generate_extra_perimeters_over_overhangs(infill_areas,
-                                                                                        lower_slices_polygons_cache,
-                                                                                        loop_number + 1,
-                                                                                        params.overhang_flow, params.scaled_resolution,
-                                                                                        params.object_config, params.print_config);
+        auto [extra_perimeters, filled_area] = generate_overhang_toolpaths(infill_areas,
+                                                                           lower_slices_polygons_cache,
+                                                                           loop_number + 1,
+                                                                           params.overhang_flow, params.scaled_resolution,
+                                                                           params.object_config, params.print_config,
+                                                                           params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;

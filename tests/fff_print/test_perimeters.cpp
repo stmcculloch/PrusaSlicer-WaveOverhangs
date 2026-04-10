@@ -16,6 +16,31 @@
 
 using namespace Slic3r;
 
+namespace {
+
+size_t count_overhang_paths(const ExtrusionEntityCollection &collection)
+{
+    ExtrusionEntityCollection flat = collection.flatten(true);
+    return std::count_if(flat.entities.begin(), flat.entities.end(), [](const ExtrusionEntity *entity) {
+        return entity->role() == ExtrusionRole::OverhangPerimeter;
+    });
+}
+
+bool last_flat_entity_is_overhang(const ExtrusionEntityCollection &collection)
+{
+    ExtrusionEntityCollection flat = collection.flatten(true);
+    return ! flat.entities.empty() && flat.entities.back()->role() == ExtrusionRole::OverhangPerimeter;
+}
+
+double total_area(const ExPolygons &expolygons)
+{
+    return std::accumulate(expolygons.begin(), expolygons.end(), 0.0, [](double acc, const ExPolygon &expolygon) {
+        return acc + expolygon.area();
+    });
+}
+
+} // namespace
+
 SCENARIO("Perimeter nesting", "[Perimeters]")
 {
     struct TestData {
@@ -581,6 +606,62 @@ SCENARIO("Perimeters4", "[Perimeters]")
     std::string gcode = Slic3r::Test::slice({ Slic3r::Test::TestMesh::cube_20x20x20 }, config);
     THEN("successful generation of G-code with seam_position = random") {
         REQUIRE(! gcode.empty());
+    }
+}
+
+SCENARIO("Wave overhangs", "[Perimeters]")
+{
+    const ExPolygon surface_exp = ExPolygon{ Polygon::new_scale({ { 0, 0 }, { 40, 0 }, { 40, 20 }, { 0, 20 } }) };
+    const ExPolygons overhang_lower = { ExPolygon{ Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 20 }, { 0, 20 } }) } };
+    const ExPolygons supported_lower = { surface_exp };
+
+    auto run = [&surface_exp](bool use_arachne, bool enable_wave, const ExPolygons &lower_slices) {
+        FullPrintConfig config;
+        config.perimeters.value                   = 2;
+        config.overhangs.value                    = true;
+        config.extra_perimeters_on_overhangs.value = false;
+        config.wave_overhangs.value               = enable_wave;
+
+        Flow flow(1., 1., 1.);
+        PerimeterRegions perimeter_regions;
+        PerimeterGenerator::Parameters params(
+            1.,
+            1,
+            flow, flow, flow, flow,
+            static_cast<const PrintRegionConfig&>(config),
+            static_cast<const PrintObjectConfig&>(config),
+            static_cast<const PrintConfig&>(config),
+            perimeter_regions,
+            false);
+
+        Surface                   surface(stInternal, surface_exp);
+        Polygons                  lower_slices_polygons_cache;
+        ExtrusionEntityCollection loops;
+        ExtrusionEntityCollection gap_fill;
+        ExPolygons                fill_expolygons;
+
+        if (use_arachne) {
+            PerimeterGenerator::process_arachne(params, surface, &lower_slices, nullptr, lower_slices_polygons_cache, loops, gap_fill, fill_expolygons);
+        } else {
+            PerimeterGenerator::process_classic(params, surface, &lower_slices, nullptr, lower_slices_polygons_cache, loops, gap_fill, fill_expolygons);
+        }
+
+        return std::make_pair(std::move(loops), std::move(fill_expolygons));
+    };
+
+    for (bool use_arachne : { false, true }) {
+        DYNAMIC_SECTION(use_arachne ? "Arachne" : "Classic") {
+            auto [overhang_loops, overhang_fill] = run(use_arachne, true, overhang_lower);
+            REQUIRE(count_overhang_paths(overhang_loops) > 0);
+            CHECK_FALSE(last_flat_entity_is_overhang(overhang_loops));
+
+            auto [supported_wave_loops, supported_wave_fill] = run(use_arachne, true, supported_lower);
+            auto [supported_base_loops, supported_base_fill] = run(use_arachne, false, supported_lower);
+            CHECK(count_overhang_paths(supported_wave_loops) == 0);
+            CHECK(count_overhang_paths(supported_base_loops) == 0);
+            CHECK(total_area(supported_wave_fill) == Catch::Approx(total_area(supported_base_fill)).margin(1e-3));
+            CHECK(total_area(overhang_fill) < total_area(supported_wave_fill));
+        }
     }
 }
 

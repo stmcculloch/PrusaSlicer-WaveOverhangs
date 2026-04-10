@@ -15,8 +15,13 @@ xs/assertlib*
 /src/TAGS
 /.vscode/
 build-linux/*
+/build-default/
+/build-no-occt/
+/shareddeps/
 deps/build*
 deps/build-linux/*
+/.codex
+/.codex/
 **/.DS_Store
 **/.idea/
 .pkg_cache

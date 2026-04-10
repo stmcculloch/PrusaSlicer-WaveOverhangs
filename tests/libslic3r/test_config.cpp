@@ -98,6 +98,16 @@ TEST_CASE("Get keys", "[Config]"){
     CHECK(!config.keys().empty());
 }
 
+TEST_CASE("Wave overhangs config plumbing", "[Config]") {
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config_with({ { "wave_overhangs", 1 } });
+    CHECK(config.opt_bool("wave_overhangs"));
+    CHECK(config.opt_serialize("wave_overhangs") == "1");
+
+    FullPrintConfig applied;
+    applied.apply(config, true);
+    CHECK(applied.wave_overhangs.value);
+}
+
 TEST_CASE("Set not already set option", "[Config]") {
     DynamicPrintConfig config;
     config.set_deserialize_strict("filament_diameter", "3");

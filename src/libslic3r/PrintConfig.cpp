@@ -1144,6 +1144,14 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionBool(false));
 
+    def = this->add("wave_overhangs", coBool);
+    def->label = L("Use wave overhangs (Experimental)");
+    def->category = L("Layers and Perimeters");
+    def->tooltip = L("Detect the same unsupported overhang regions as extra perimeters on overhangs, "
+                    "but replace that fill with wave-based overhang toolpaths while keeping the final perimeter pass.");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionBool(false));
+
     def = this->add("extruder", coInt);
     def->label = L("Extruder");
     def->category = L("Extruders");
