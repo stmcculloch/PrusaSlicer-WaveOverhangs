@@ -1,0 +1,89 @@
+name: Release Builds (Windows, macOS, Linux)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build_macos:
+    name: Build macOS
+    uses: Prusa-Development/PrusaSlicer-Actions/.github/workflows/build_osx.yml@master
+    secrets: inherit
+    with:
+      actions_branch: master
+
+  build_linux_flatpak:
+    name: Build Linux Flatpak
+    uses: Prusa-Development/PrusaSlicer-Actions/.github/workflows/build_flatpak.yml@master
+    secrets: inherit
+    with:
+      actions_branch: master
+
+  build_windows_bundle:
+    name: Build Windows Bundle
+    runs-on: windows-2022
+
+    env:
+      BUILD_CONFIG: RelWithDebInfo
+      DEPS_DIR: ${{ github.workspace }}\deps-build
+      BUNDLE_DIR: ${{ github.workspace }}\release\PrusaSlicer-WaveOverhangs-win64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build application and dependencies
+        shell: powershell
+        run: |
+          .\build_win.bat -d "${env:DEPS_DIR}" -s all-dirty -r none -c "${env:BUILD_CONFIG}"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Install bundle layout
+        shell: powershell
+        run: |
+          if (Test-Path "${env:BUNDLE_DIR}") {
+            Remove-Item -LiteralPath "${env:BUNDLE_DIR}" -Recurse -Force
+          }
+          cmake --install build --config "${env:BUILD_CONFIG}" --prefix "${env:BUNDLE_DIR}"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Archive Windows bundle
+        id: archive
+        shell: powershell
+        run: |
+          $refName = "${env:GITHUB_REF_NAME}"
+          if ([string]::IsNullOrWhiteSpace($refName)) {
+            $refName = "${env:GITHUB_SHA}".Substring(0, 7)
+          }
+          $safeRefName = $refName -replace '[^A-Za-z0-9._-]', '-'
+          $zipName = "PrusaSlicer-WaveOverhangs-$safeRefName-windows-x64.zip"
+          $zipPath = Join-Path "${env:GITHUB_WORKSPACE}" $zipName
+          if (Test-Path $zipPath) {
+            Remove-Item -LiteralPath $zipPath -Force
+          }
+          Compress-Archive -Path "${env:BUNDLE_DIR}\*" -DestinationPath $zipPath
+          "zip_name=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "zip_path=$zipPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.archive.outputs.zip_name }}
+          path: ${{ steps.archive.outputs.zip_path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive.outputs.zip_path }}
+          generate_release_notes: true
