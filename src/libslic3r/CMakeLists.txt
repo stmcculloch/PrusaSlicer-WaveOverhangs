@@ -304,6 +304,8 @@ set(SLIC3R_SOURCES
     Point.hpp
     Polygon.cpp
     Polygon.hpp
+    WaveOverhangs.cpp
+    WaveOverhangs.hpp
     MutablePolygon.cpp
     MutablePolygon.hpp
     PolygonTrimmer.cpp

@@ -1,0 +1,27 @@
+///|/ Copyright (c) Prusa Research 2026
+///|/
+///|/ PrusaSlicer is released under the terms of the AGPLv3 or higher
+///|/
+#ifndef slic3r_WaveOverhangs_hpp_
+#define slic3r_WaveOverhangs_hpp_
+
+#include <tuple>
+#include <vector>
+
+#include "libslic3r/ExPolygon.hpp"
+#include "libslic3r/ExtrusionEntity.hpp"
+#include "libslic3r/Flow.hpp"
+#include "libslic3r/Polygon.hpp"
+
+namespace Slic3r::WaveOverhangs {
+
+std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
+    ExPolygons      infill_area,
+    const Polygons &lower_slices_polygons,
+    int             perimeter_count,
+    const Flow     &overhang_flow,
+    double          scaled_resolution);
+
+} // namespace Slic3r::WaveOverhangs
+
+#endif
