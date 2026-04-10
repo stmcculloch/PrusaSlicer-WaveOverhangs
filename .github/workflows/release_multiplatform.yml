@@ -1,4 +1,4 @@
-name: Release Builds (Windows, macOS, Linux)
+name: Release Windows Build
 
 on:
   workflow_dispatch:
@@ -10,20 +10,6 @@ permissions:
   contents: write
 
 jobs:
-  build_macos:
-    name: Build macOS
-    uses: Prusa-Development/PrusaSlicer-Actions/.github/workflows/build_osx.yml@master
-    secrets: inherit
-    with:
-      actions_branch: master
-
-  build_linux_flatpak:
-    name: Build Linux Flatpak
-    uses: Prusa-Development/PrusaSlicer-Actions/.github/workflows/build_flatpak.yml@master
-    secrets: inherit
-    with:
-      actions_branch: master
-
   build_windows_bundle:
     name: Build Windows Bundle
     runs-on: windows-2022
