@@ -26,7 +26,7 @@ jobs:
       - name: Build application and dependencies
         shell: powershell
         run: |
-          .\build_win.bat -d "${env:DEPS_DIR}" -s all-dirty -r none -c "${env:BUILD_CONFIG}"
+          .\build_win.bat -d "${env:DEPS_DIR}" -s all -r none -c "${env:BUILD_CONFIG}"
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
