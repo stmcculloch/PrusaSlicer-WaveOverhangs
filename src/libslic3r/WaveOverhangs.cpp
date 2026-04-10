@@ -23,6 +23,11 @@ constexpr double toolpath_fit_tolerance_factor = 0.035;
 
 #define EXTRA_PERIMETER_OFFSET_PARAMETERS ClipperLib::jtSquare, 0.
 
+enum class PropagationMode {
+    DirectDistance,
+    Cumulative
+};
+
 bool try_merge_polylines(Polyline &base, Polyline &other)
 {
     if (base.empty() || other.empty())
@@ -127,6 +132,90 @@ Polylines trim_front_to_toolpaths(const ExPolygons &region, const ExPolygons &tr
     return contour_linework;
 }
 
+void append_fronts_to_extrusions(ExtrusionPaths    &overhang_region,
+                                 Polygons          &filled_area,
+                                 const ExPolygon   &overhang,
+                                 const ExPolygons  &region,
+                                 const ExPolygons  &trim_boundary,
+                                 const Flow        &overhang_flow,
+                                 const double       fit_tolerance,
+                                 const double       min_length)
+{
+    Polylines fronts = trim_front_to_toolpaths(region, trim_boundary, fit_tolerance, min_length);
+    if (fronts.empty())
+        return;
+
+    extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, overhang_flow });
+    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), ExPolygons{ overhang }));
+}
+
+void generate_direct_toolpath_lines(const ExPolygon  &overhang,
+                                    const ExPolygon  &boundary_a,
+                                    const ExPolygons &trim_boundary,
+                                    const Polylines  &seed_lines,
+                                    ExtrusionPaths   &overhang_region,
+                                    Polygons         &filled_area,
+                                    const Flow       &overhang_flow,
+                                    const double      fit_tolerance,
+                                    const double      min_length)
+{
+    const size_t max_iterations = std::max<size_t>(
+        3, size_t(std::ceil(get_extents(boundary_a).radius() / std::max(1.0, double(overhang_flow.scaled_spacing())))) + 2);
+
+    for (size_t iteration = 1; iteration <= max_iterations; ++iteration) {
+        const float distance = float(iteration * overhang_flow.scaled_spacing());
+        ExPolygons region = intersection_ex(
+            offset(seed_lines, distance, jtRound, 0., ClipperLib::etOpenRound),
+            ExPolygons{ boundary_a });
+        if (region.empty())
+            break;
+
+        const size_t num_paths_before = overhang_region.size();
+        append_fronts_to_extrusions(overhang_region, filled_area, overhang, region, trim_boundary, overhang_flow, fit_tolerance, min_length);
+        if (overhang_region.size() == num_paths_before && iteration > 1)
+            break;
+    }
+}
+
+void generate_cumulative_toolpath_lines(const ExPolygon  &overhang,
+                                        const ExPolygon  &boundary_a,
+                                        const ExPolygons &trim_boundary,
+                                        const Polylines  &seed_lines,
+                                        const coord_t     line_buffer_eps,
+                                        ExtrusionPaths   &overhang_region,
+                                        Polygons         &filled_area,
+                                        const Flow       &overhang_flow,
+                                        const double      fit_tolerance,
+                                        const double      min_length,
+                                        const double      min_new_area)
+{
+    ExPolygons accumulated_region = intersection_ex(
+        offset(seed_lines, float(line_buffer_eps), jtRound, 0., ClipperLib::etOpenRound),
+        ExPolygons{ boundary_a });
+    if (accumulated_region.empty())
+        return;
+
+    double       accumulated_area = area(accumulated_region);
+    const size_t max_iterations = std::max<size_t>(
+        3, size_t(std::ceil(get_extents(boundary_a).radius() / std::max(1.0, double(overhang_flow.scaled_spacing())))) + 2);
+
+    for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
+        ExPolygons next_region = intersection_ex(
+            offset(accumulated_region, float(overhang_flow.scaled_spacing()), jtRound, 0.),
+            ExPolygons{ boundary_a });
+        if (next_region.empty())
+            break;
+
+        double next_area = area(next_region);
+        if (next_area <= accumulated_area + min_new_area)
+            break;
+
+        append_fronts_to_extrusions(overhang_region, filled_area, overhang, next_region, trim_boundary, overhang_flow, fit_tolerance, min_length);
+        accumulated_region = std::move(next_region);
+        accumulated_area   = next_area;
+    }
+}
+
 } // namespace
 
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
@@ -177,36 +266,17 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             if (trim_boundary.empty())
                 trim_boundary = ExPolygons{ boundary_a[boundary_idx] };
 
-            ExPolygons accumulated_region = intersection_ex(
-                offset(seed_lines, float(line_buffer_eps), jtRound, 0., ClipperLib::etOpenRound),
-                ExPolygons{ boundary_a[boundary_idx] });
-            if (accumulated_region.empty())
-                continue;
-
             ExtrusionPaths &overhang_region = wave_paths.emplace_back();
-            double          accumulated_area = area(accumulated_region);
-            const size_t    max_iterations = std::max<size_t>(
-                3, size_t(std::ceil(get_extents(boundary_a[boundary_idx]).radius() / std::max(1.0, double(overhang_flow.scaled_spacing())))) + 2);
+            const PropagationMode mode = boundary_a[boundary_idx].holes.empty() ? PropagationMode::DirectDistance : PropagationMode::Cumulative;
 
-            for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
-                ExPolygons next_region = intersection_ex(
-                    offset(accumulated_region, float(overhang_flow.scaled_spacing()), jtRound, 0.),
-                    ExPolygons{ boundary_a[boundary_idx] });
-                if (next_region.empty())
-                    break;
-
-                double next_area = area(next_region);
-                if (next_area <= accumulated_area + min_new_area)
-                    break;
-
-                Polylines fronts = trim_front_to_toolpaths(next_region, trim_boundary, fit_tolerance, min_length);
-                if (! fronts.empty()) {
-                    extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, overhang_flow });
-                    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), ExPolygons{ overhang }));
-                }
-
-                accumulated_region = std::move(next_region);
-                accumulated_area   = next_area;
+            if (mode == PropagationMode::DirectDistance) {
+                generate_direct_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, overhang_region, filled_area,
+                    overhang_flow, fit_tolerance, min_length);
+            } else {
+                generate_cumulative_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, line_buffer_eps, overhang_region,
+                    filled_area, overhang_flow, fit_tolerance, min_length, min_new_area);
             }
 
             overhang_region.erase(

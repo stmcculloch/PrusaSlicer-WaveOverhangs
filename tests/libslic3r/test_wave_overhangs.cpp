@@ -5,6 +5,20 @@
 
 using namespace Slic3r;
 
+TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverhangs]")
+{
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
+    Polygons lower_support = {
+        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
+    };
+
+    Flow flow(1., 1., 1.);
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, flow, scale_(0.01));
+
+    REQUIRE(! regions.empty());
+    CHECK(! filled_area.empty());
+}
+
 TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhangs]")
 {
     ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 50, 0 }, { 50, 30 }, { 0, 30 } }) };
