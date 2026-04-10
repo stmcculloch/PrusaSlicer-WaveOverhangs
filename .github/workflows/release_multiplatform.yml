@@ -1,4 +1,4 @@
-name: Release Windows Build
+name: Release Builds (Windows, macOS, Linux)
 
 on:
   workflow_dispatch:
@@ -10,6 +10,159 @@ permissions:
   contents: write
 
 jobs:
+  build_linux_bundle:
+    name: Build Linux Bundle
+    runs-on: ubuntu-22.04
+
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build-release-linux
+      DEPS_DESTDIR: ${{ github.workspace }}/deps/build/destdir
+      BUNDLE_DIR: ${{ github.workspace }}/release/PrusaSlicer-WaveOverhangs-linux-x64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            git \
+            build-essential \
+            autoconf \
+            cmake \
+            libglu1-mesa-dev \
+            libgtk-3-dev \
+            libdbus-1-dev \
+            libwebkit2gtk-4.1-dev \
+            texinfo
+
+      - name: Build bundled dependencies
+        run: |
+          cmake -S deps -B deps/build -DDESTDIR="${DEPS_DESTDIR}" -DDEP_WX_GTK3=ON
+          cmake --build deps/build --parallel 2
+
+      - name: Build application
+        run: |
+          cmake -S . -B "${BUILD_DIR}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DSLIC3R_STATIC=1 \
+            -DSLIC3R_GTK=3 \
+            -DSLIC3R_PCH=OFF \
+            -DCMAKE_PREFIX_PATH="${DEPS_DESTDIR}/usr/local"
+          cmake --build "${BUILD_DIR}" --parallel 2
+
+      - name: Install bundle layout
+        run: |
+          rm -rf "${BUNDLE_DIR}"
+          cmake --install "${BUILD_DIR}" --prefix "${BUNDLE_DIR}"
+
+      - name: Archive Linux bundle
+        id: archive_linux
+        shell: bash
+        run: |
+          ref_name="${GITHUB_REF_NAME:-${GITHUB_SHA::7}}"
+          safe_ref_name="$(echo "$ref_name" | sed 's/[^A-Za-z0-9._-]/-/g')"
+          archive_name="PrusaSlicer-WaveOverhangs-${safe_ref_name}-linux-x64.tar.gz"
+          archive_path="${GITHUB_WORKSPACE}/${archive_name}"
+          tar -C "${GITHUB_WORKSPACE}/release" -czf "${archive_path}" "$(basename "${BUNDLE_DIR}")"
+          echo "archive_name=${archive_name}" >> "${GITHUB_OUTPUT}"
+          echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.archive_linux.outputs.archive_name }}
+          path: ${{ steps.archive_linux.outputs.archive_path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive_linux.outputs.archive_path }}
+          generate_release_notes: true
+
+  build_macos_bundle:
+    name: Build macOS Bundle
+    runs-on: macos-13
+
+    env:
+      BUILD_DIR: ${{ github.workspace }}/build-release-macos
+      DEPS_DESTDIR: ${{ github.workspace }}/deps/build/destdir
+      BUNDLE_DIR: ${{ github.workspace }}/release/PrusaSlicer-WaveOverhangs-macos-x64
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install CMake 3.27
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "cmake==3.27.9"
+          python - <<'PY' >> "$GITHUB_PATH"
+          import os, site
+          print(os.path.join(site.USER_BASE, "bin"))
+          PY
+
+      - name: Install system dependencies
+        run: |
+          brew update
+          brew install automake gettext libtool texinfo m4 zlib
+
+      - name: Build bundled dependencies
+        run: |
+          cmake -S deps -B deps/build -DDESTDIR="${DEPS_DESTDIR}"
+          cmake --build deps/build --parallel 3
+
+      - name: Build application
+        run: |
+          cmake -S . -B "${BUILD_DIR}" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${DEPS_DESTDIR}/usr/local"
+          cmake --build "${BUILD_DIR}" --parallel 3
+
+      - name: Install bundle layout
+        shell: bash
+        run: |
+          rm -rf "${BUNDLE_DIR}"
+          cmake --install "${BUILD_DIR}" --prefix "${BUNDLE_DIR}"
+          if [ -d "${BUNDLE_DIR}/resources" ] && [ ! -e "${BUNDLE_DIR}/Resources" ]; then
+            mv "${BUNDLE_DIR}/resources" "${BUNDLE_DIR}/Resources"
+          fi
+
+      - name: Archive macOS bundle
+        id: archive_macos
+        shell: bash
+        run: |
+          ref_name="${GITHUB_REF_NAME:-${GITHUB_SHA::7}}"
+          safe_ref_name="$(echo "$ref_name" | sed 's/[^A-Za-z0-9._-]/-/g')"
+          archive_name="PrusaSlicer-WaveOverhangs-${safe_ref_name}-macos-x64.tar.gz"
+          archive_path="${GITHUB_WORKSPACE}/${archive_name}"
+          tar -C "${GITHUB_WORKSPACE}/release" -czf "${archive_path}" "$(basename "${BUNDLE_DIR}")"
+          echo "archive_name=${archive_name}" >> "${GITHUB_OUTPUT}"
+          echo "archive_path=${archive_path}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.archive_macos.outputs.archive_name }}
+          path: ${{ steps.archive_macos.outputs.archive_path }}
+          if-no-files-found: error
+
+      - name: Publish GitHub release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.archive_macos.outputs.archive_path }}
+          generate_release_notes: true
+
   build_windows_bundle:
     name: Build Windows Bundle
     runs-on: windows-2022
