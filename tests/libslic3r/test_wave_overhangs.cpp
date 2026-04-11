@@ -61,5 +61,18 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     REQUIRE(! modified_regions.empty());
     CHECK(! baseline_filled.empty());
     CHECK(! modified_filled.empty());
-    CHECK(modified_regions.front().front().width() == Approx(0.5f));
+
+    bool saw_wave_width_path = false;
+    bool saw_shell_width_path = false;
+    for (const ExtrusionPaths &paths : modified_regions) {
+        for (const ExtrusionPath &path : paths) {
+            if (path.width() == Approx(0.5f))
+                saw_wave_width_path = true;
+            if (path.width() == Approx(1.0f))
+                saw_shell_width_path = true;
+        }
+    }
+
+    CHECK(saw_wave_width_path);
+    CHECK(saw_shell_width_path);
 }
