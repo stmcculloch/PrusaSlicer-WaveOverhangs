@@ -231,13 +231,22 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Flow     &overhang_flow,
     double          scaled_resolution)
 {
-    const double overlap_fraction    = std::clamp(nozzle_overlap_percent, 0.0, 95.0) / 100.0;
-    const coord_t wave_spacing       = std::max<coord_t>(1, coord_t(std::llround(double(overhang_flow.scaled_width()) * (1.0 - overlap_fraction))));
+    const coord_t base_spacing       = overhang_flow.scaled_spacing();
+    const bool    use_base_geometry  = outer_perimeter_count <= 1 && nozzle_overlap_percent <= 0.;
+
+    coord_t wave_spacing       = base_spacing;
+    coord_t inset_b_distance   = std::max<coord_t>(1, base_spacing);
+    if (! use_base_geometry) {
+        const double overlap_fraction = std::clamp(nozzle_overlap_percent, 0.0, 95.0) / 100.0;
+        const coord_t overlap_distance = coord_t(std::llround(double(overhang_flow.scaled_width()) * overlap_fraction));
+        wave_spacing = std::max<coord_t>(1, base_spacing - overlap_distance);
+        inset_b_distance = std::max<coord_t>(1, wave_spacing * std::max(1, outer_perimeter_count));
+    }
+
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), wave_spacing * (perimeter_count + 1));
     const coord_t tiny_expansion     = std::max<coord_t>(1, wave_spacing / 20);
     const coord_t line_buffer_eps    = std::max<coord_t>(1, wave_spacing / 50);
     const coord_t inset_a_distance   = std::max<coord_t>(1, wave_spacing / 2);
-    const coord_t inset_b_distance   = std::max<coord_t>(1, wave_spacing * std::max(1, outer_perimeter_count));
     const double  fit_tolerance      = std::max(1.0, std::min(scaled_resolution, toolpath_fit_tolerance_factor * double(wave_spacing)));
     const double  min_length         = 0.6 * double(wave_spacing);
     const double  min_new_area       = std::max(1.0, 3.0 * double(line_buffer_eps) * double(line_buffer_eps));

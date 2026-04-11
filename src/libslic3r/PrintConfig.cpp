@@ -1169,7 +1169,7 @@ void PrintConfigDef::init_fff_params()
     def->min = 0;
     def->max = 95;
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionFloat(12.5));
+    def->set_default_value(new ConfigOptionFloat(0));
 
     def = this->add("wave_overhang_print_speed", coFloat);
     def->label = L("Wave overhang print speed");

@@ -998,13 +998,11 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(Ex
                                                                               bool                     use_wave_overhangs)
 {
     if (use_wave_overhangs) {
-        auto [wave_paths, filled_area] = WaveOverhangs::generate(
+        return WaveOverhangs::generate(
             infill_area, lower_slices_polygons, perimeter_count,
             region_config.wave_overhang_outer_perimeters.value,
             region_config.wave_overhang_nozzle_overlap.value,
             overhang_flow, scaled_resolution);
-        if (! wave_paths.empty())
-            return { std::move(wave_paths), std::move(filled_area) };
     }
 
     return generate_extra_perimeters_over_overhangs(
