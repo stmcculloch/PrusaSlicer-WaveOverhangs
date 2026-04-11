@@ -132,7 +132,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     ExPolygons      infill_area,
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
-    int             outer_perimeter_count,
+    int             additional_shell_count,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
@@ -143,7 +143,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
-    const coord_t shell_inner_edge   = outer_perimeter_count > 0 ? overhang_flow.scaled_width() + (outer_perimeter_count - 1) * base_spacing : 0;
+    const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
     const coord_t trim_inset         = std::max<coord_t>(std::max<coord_t>(1, wave_flow.scaled_width() / 2), shell_inner_edge + wave_flow.scaled_width() / 2);
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
@@ -216,7 +216,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         overhang_region.erase(
             std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
             overhang_region.end());
-        append_shell_perimeters(overhang_region, filled_area, overhang_to_cover, outer_perimeter_count, base_spacing, overhang_flow, scaled_resolution);
+        append_shell_perimeters(overhang_region, filled_area, overhang_to_cover, additional_shell_count, base_spacing, overhang_flow, scaled_resolution);
         if (overhang_region.empty())
             wave_paths.pop_back();
     }
