@@ -160,55 +160,60 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
     for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
         Polygons overhang_to_cover = to_polygons(overhang);
-        Polygons real_overhang     = intersection(overhang_to_cover, overhangs);
+        Polygons wave_cover_area   = additional_shell_count > 0 ? shrink(overhang_to_cover, shell_inner_edge, jtRound, 0.) : overhang_to_cover;
+        Polygons real_overhang     = intersection(wave_cover_area, overhangs);
         if (real_overhang.empty())
-            continue;
-
-        Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
-        Polylines seeds    = generate_wave_overhang_seeds(overhang, anchoring, seed_expansion);
-        if (seeds.empty())
-            continue;
-
-        Polygons trim_boundary = shrink(overhang_to_cover, trim_inset, jtRound, 0.);
-        if (trim_boundary.empty())
-            trim_boundary = shrink(overhang_to_cover, 0.1 * base_spacing);
-        if (trim_boundary.empty())
-            trim_boundary = overhang_to_cover;
-
-        Polygons accumulated_region = intersection(offset(seeds, float(seed_expansion), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover);
-        if (accumulated_region.empty())
-            continue;
+            wave_cover_area.clear();
 
         ExtrusionPaths &overhang_region = wave_paths.emplace_back();
-        double          accumulated_area = area(accumulated_region);
-        const size_t    max_iterations   = std::max<size_t>(
-            3, size_t(std::ceil(get_extents(overhang_to_cover).radius() / std::max(1.0, double(wave_spacing)))) + 2);
 
-        for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
-            Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), overhang_to_cover);
-            if (next_region.empty())
-                break;
+        for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
+            Polygons wave_cover_polygons = to_polygons(wave_cover);
+            Polygons anchoring = intersection(expand(wave_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
+            Polylines seeds    = generate_wave_overhang_seeds(wave_cover, anchoring, seed_expansion);
+            if (seeds.empty())
+                continue;
 
-            double next_area = area(next_region);
-            if (next_area <= accumulated_area + min_area_growth)
-                break;
+            Polygons trim_boundary = shrink(wave_cover_polygons, std::max<coord_t>(1, wave_flow.scaled_width() / 2), jtRound, 0.);
+            if (trim_boundary.empty())
+                trim_boundary = shrink(wave_cover_polygons, 0.1 * base_spacing);
+            if (trim_boundary.empty())
+                trim_boundary = wave_cover_polygons;
 
-            Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
-            for (Polyline &front : fronts)
-                front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
-            fronts.erase(
-                std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
-                fronts.end());
-            fronts = reconnect_polylines(fronts, wave_spacing);
+            Polygons accumulated_region = intersection(offset(seeds, float(seed_expansion), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
+            if (accumulated_region.empty())
+                continue;
 
-            if (! fronts.empty()) {
-                extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
-                if (! coarse_area_accounting)
-                    append(filled_area, intersection(offset(fronts, float(0.5 * wave_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
+            double       accumulated_area = area(accumulated_region);
+            const size_t max_iterations   = std::max<size_t>(
+                3, size_t(std::ceil(get_extents(wave_cover_polygons).radius() / std::max(1.0, double(wave_spacing)))) + 2);
+
+            for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
+                Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
+                if (next_region.empty())
+                    break;
+
+                double next_area = area(next_region);
+                if (next_area <= accumulated_area + min_area_growth)
+                    break;
+
+                Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
+                for (Polyline &front : fronts)
+                    front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
+                fronts.erase(
+                    std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
+                    fronts.end());
+                fronts = reconnect_polylines(fronts, wave_spacing);
+
+                if (! fronts.empty()) {
+                    extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+                    if (! coarse_area_accounting)
+                        append(filled_area, intersection(offset(fronts, float(0.5 * wave_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons));
+                }
+
+                accumulated_region = std::move(next_region);
+                accumulated_area   = next_area;
             }
-
-            accumulated_region = std::move(next_region);
-            accumulated_area   = next_area;
         }
 
         overhang_region.erase(
