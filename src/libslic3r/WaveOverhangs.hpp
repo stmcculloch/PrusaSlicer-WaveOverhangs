@@ -19,7 +19,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     ExPolygons      infill_area,
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
-    int             outer_perimeter_count,
+    int             additional_shell_count,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
