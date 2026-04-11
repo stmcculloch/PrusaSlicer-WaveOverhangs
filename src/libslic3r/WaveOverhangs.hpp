@@ -20,6 +20,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
     int             outer_perimeter_count,
+    double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
     double          scaled_resolution);

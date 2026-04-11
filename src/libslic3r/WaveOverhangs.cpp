@@ -103,20 +103,19 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
     int             outer_perimeter_count,
+    double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
     double          scaled_resolution)
 {
-    // Restore the only geometry path confirmed to work on real slices: e9aadb1.
-    // Keep the newer settings in the public API, but do not let them perturb
-    // the core wave generation until a verified parameterized variant exists.
     (void) outer_perimeter_count;
-    (void) wave_line_width;
 
-    const coord_t wave_spacing       = overhang_flow.scaled_spacing();
-    const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), wave_spacing * (perimeter_count + 1));
-    const coord_t seed_expansion     = std::max<coord_t>(1, wave_spacing / 10);
-    const coord_t trim_inset         = std::max<coord_t>(1, overhang_flow.scaled_width() / 2);
+    const coord_t base_spacing       = overhang_flow.scaled_spacing();
+    const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
+    const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
+    const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
+    const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
+    const coord_t trim_inset         = std::max<coord_t>(1, wave_flow.scaled_width() / 2);
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -139,14 +138,14 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         if (real_overhang.empty())
             continue;
 
-        Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * wave_spacing, jtRound, 0.), inset_anchors);
+        Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
         Polylines seeds    = generate_wave_overhang_seeds(overhang, anchoring, seed_expansion);
         if (seeds.empty())
             continue;
 
         Polygons trim_boundary = shrink(overhang_to_cover, trim_inset, jtRound, 0.);
         if (trim_boundary.empty())
-            trim_boundary = shrink(overhang_to_cover, 0.1 * wave_spacing);
+            trim_boundary = shrink(overhang_to_cover, 0.1 * base_spacing);
         if (trim_boundary.empty())
             trim_boundary = overhang_to_cover;
 
@@ -177,8 +176,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             fronts = reconnect_polylines(fronts, wave_spacing);
 
             if (! fronts.empty()) {
-                extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, overhang_flow });
-                append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
+                extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+                append(filled_area, intersection(offset(fronts, float(0.5 * wave_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
             }
 
             accumulated_region = std::move(next_region);

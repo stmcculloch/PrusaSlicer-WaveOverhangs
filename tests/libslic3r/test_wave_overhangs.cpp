@@ -13,7 +13,7 @@ TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverh
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
@@ -32,14 +32,14 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
 
     Polygons swept_paths;
     for (const ExtrusionPaths &paths : regions)
         for (const ExtrusionPath &path : paths)
-            append(swept_paths, offset(path.polyline, float(0.5 * flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound));
+            append(swept_paths, offset(path.polyline, float(0.5 * path.width()), jtRound, 0., ClipperLib::etOpenRound));
 
     Polygons hole = { infill.holes.front() };
     CHECK(intersection(filled_area, hole).empty());
@@ -54,11 +54,12 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     };
 
     Flow flow(1., 1., 1.);
-    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.35, flow, scale_(0.01));
-    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.75, flow, scale_(0.01));
+    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 1.0, flow, scale_(0.01));
+    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.75, 0.5, flow, scale_(0.01));
 
     REQUIRE(! baseline_regions.empty());
     REQUIRE(! modified_regions.empty());
     CHECK(! baseline_filled.empty());
     CHECK(! modified_filled.empty());
+    CHECK(modified_regions.front().front().width() == Approx(0.5f));
 }

@@ -289,7 +289,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig* config)
         toggle_field(el, have_perimeters);
 
     const bool have_wave_overhangs = have_perimeters && config->opt_bool("wave_overhangs");
-    for (auto el : { "wave_overhang_outer_perimeters", "wave_overhang_line_width", "wave_overhang_print_speed",
+    for (auto el : { "wave_overhang_outer_perimeters", "wave_overhang_line_spacing", "wave_overhang_line_width", "wave_overhang_print_speed",
                      "wave_overhang_travel_speed" })
         toggle_field(el, have_wave_overhangs);
 
