@@ -1699,11 +1699,11 @@ void TabPrint::build()
         optgroup->append_single_option_line("solid_infill_extrusion_width");
         optgroup->append_single_option_line("top_infill_extrusion_width");
         optgroup->append_single_option_line("support_material_extrusion_width");
+        optgroup->append_single_option_line("wave_overhang_line_width");
         optgroup->append_single_option_line("automatic_extrusion_widths");
 
         optgroup = page->new_optgroup(L("Overlap"));
         optgroup->append_single_option_line("infill_overlap");
-        optgroup->append_single_option_line("wave_overhang_nozzle_overlap");
 
         optgroup = page->new_optgroup(L("Flow"));
         optgroup->append_single_option_line("bridge_flow_ratio");

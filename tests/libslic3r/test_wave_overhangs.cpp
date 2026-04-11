@@ -21,7 +21,7 @@ TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverh
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 12.5, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
@@ -40,7 +40,7 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 12.5, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
 
@@ -54,7 +54,7 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
     CHECK(intersection(swept_paths, hole).empty());
 }
 
-TEST_CASE("Wave overhang nozzle overlap increases wave density", "[WaveOverhangs]")
+TEST_CASE("Wave overhang custom line width increases wave density", "[WaveOverhangs]")
 {
     ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
     Polygons lower_support = {
@@ -63,7 +63,7 @@ TEST_CASE("Wave overhang nozzle overlap increases wave density", "[WaveOverhangs
 
     Flow flow(1., 1., 1.);
     auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.0, flow, scale_(0.01));
-    auto [dense_regions, dense_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 25.0, flow, scale_(0.01));
+    auto [dense_regions, dense_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
 
     REQUIRE(! baseline_regions.empty());
     REQUIRE(! dense_regions.empty());
@@ -79,8 +79,8 @@ TEST_CASE("Wave overhang outer perimeter reserve reduces filled area", "[WaveOve
     };
 
     Flow flow(1., 1., 1.);
-    auto [one_outer_regions, one_outer_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 12.5, flow, scale_(0.01));
-    auto [two_outer_regions, two_outer_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 12.5, flow, scale_(0.01));
+    auto [one_outer_regions, one_outer_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.75, flow, scale_(0.01));
+    auto [two_outer_regions, two_outer_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.75, flow, scale_(0.01));
 
     REQUIRE(! one_outer_regions.empty());
     REQUIRE(! two_outer_regions.empty());

@@ -1160,14 +1160,13 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionInt(1));
 
-    def = this->add("wave_overhang_nozzle_overlap", coFloat);
-    def->label = L("Wave overhang nozzle overlap");
-    def->category = L("Overlap");
-    def->tooltip = L("Overlap between neighboring wave-overhang lines, expressed as a percentage of the wave-overhang extrusion width. "
-                     "This reduces the effective wave spacing while keeping the extrusion width unchanged.");
-    def->sidetext = L("%");
+    def = this->add("wave_overhang_line_width", coFloat);
+    def->label = L("Wave overhang line width");
+    def->category = L("Extrusion Width");
+    def->tooltip = L("Explicit line width used as the wave wavelength for wave-overhang paths. "
+                     "Set to 0 to use the default overhang spacing.");
+    def->sidetext = L("mm");
     def->min = 0;
-    def->max = 95;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0));
 
