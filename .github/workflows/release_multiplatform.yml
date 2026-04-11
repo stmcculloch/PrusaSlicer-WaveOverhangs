@@ -85,7 +85,7 @@ jobs:
 
   build_macos_bundle:
     name: Build macOS Bundle
-    runs-on: macos-13
+    runs-on: macos-15
 
     env:
       BUILD_DIR: ${{ github.workspace }}/build-release-macos
@@ -119,14 +119,14 @@ jobs:
       - name: Build bundled dependencies
         run: |
           cmake -S deps -B deps/build -DDESTDIR="${DEPS_DESTDIR}"
-          cmake --build deps/build --parallel 3
+          cmake --build deps/build --parallel 1 --verbose
 
       - name: Build application
         run: |
           cmake -S . -B "${BUILD_DIR}" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="${DEPS_DESTDIR}/usr/local"
-          cmake --build "${BUILD_DIR}" --parallel 3
+          cmake --build "${BUILD_DIR}" --parallel 1 --verbose
 
       - name: Install bundle layout
         shell: bash

@@ -148,7 +148,7 @@ void append_fronts_to_extrusions(ExtrusionPaths    &overhang_region,
     ExtrusionAttributes attributes{ ExtrusionRole::OverhangPerimeter, overhang_flow };
     attributes.wave_overhang = true;
     extrusion_paths_append(overhang_region, fronts, attributes);
-    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), ExPolygons{ overhang }));
+    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang));
 }
 
 void generate_direct_toolpath_lines(const ExPolygon  &overhang,
@@ -265,7 +265,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     std::vector<ExtrusionPaths> wave_paths;
     Polygons                    filled_area;
 
-    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+    for (const ExPolygon &overhang : union_ex(inset_overhang_area)) {
         if (intersection(to_polygons(overhang), overhangs).empty())
             continue;
 
