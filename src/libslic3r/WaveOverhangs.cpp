@@ -146,7 +146,7 @@ void append_fronts_to_extrusions(ExtrusionPaths    &overhang_region,
         return;
 
     extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, overhang_flow });
-    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), ExPolygons{ overhang }));
+    append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang));
 }
 
 void generate_direct_toolpath_lines(const ExPolygon  &overhang,
