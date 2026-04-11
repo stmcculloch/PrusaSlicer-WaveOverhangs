@@ -100,7 +100,7 @@ TEST_CASE("Get keys", "[Config]"){
 
 TEST_CASE("Wave overhangs config plumbing", "[Config]") {
     DynamicPrintConfig defaults = DynamicPrintConfig::full_print_config();
-    CHECK(defaults.opt_float("wave_overhang_line_width") == Approx(0.0));
+    CHECK(defaults.opt_float("wave_overhang_line_width") == Approx(0.35));
 
     DynamicPrintConfig config = DynamicPrintConfig::full_print_config_with({
         { "wave_overhangs", 1 },
