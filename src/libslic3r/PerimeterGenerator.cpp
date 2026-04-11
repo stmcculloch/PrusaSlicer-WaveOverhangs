@@ -1022,7 +1022,7 @@ static ExPolygons expand_wave_target_area(const ExPolygons &infill_areas, int pe
 
 static bool should_replace_with_wave_path(const ExtrusionPath &path, uint16_t desired_total_perimeters)
 {
-    return path.role().is_perimeter() && path.role().is_bridge() &&
+    return path.role().is_perimeter() &&
            path.attributes().perimeter_index.has_value() &&
            *path.attributes().perimeter_index >= desired_total_perimeters;
 }
