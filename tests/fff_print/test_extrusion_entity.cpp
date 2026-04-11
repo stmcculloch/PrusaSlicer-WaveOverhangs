@@ -419,3 +419,12 @@ TEST_CASE("ExtrusionEntityCollection: Chained path with no explicit starting poi
     auto chained   = chain_polylines(polylines);
     REQUIRE(chained == target);
 }
+
+TEST_CASE("Wave overhang marker does not affect extrusion attribute equality", "[ExtrusionEntity]")
+{
+    ExtrusionAttributes baseline{ ExtrusionRole::OverhangPerimeter, ExtrusionFlow{ 1.0, 0.4f, 0.2f } };
+    ExtrusionAttributes wave = baseline;
+    wave.wave_overhang = true;
+
+    REQUIRE(baseline == wave);
+}

@@ -162,9 +162,9 @@ struct ExtrusionAttributes : ExtrusionFlow
 
 inline bool operator==(const ExtrusionAttributes &lhs, const ExtrusionAttributes &rhs)
 {
+    // wave_overhang is export-only metadata and must not perturb geometry-side path grouping.
     return static_cast<const ExtrusionFlow&>(lhs) == static_cast<const ExtrusionFlow&>(rhs) &&
-           lhs.role == rhs.role && lhs.overhang_attributes == rhs.overhang_attributes &&
-           lhs.wave_overhang == rhs.wave_overhang;
+           lhs.role == rhs.role && lhs.overhang_attributes == rhs.overhang_attributes;
 }
 
 class ExtrusionPath : public ExtrusionEntity
@@ -203,6 +203,7 @@ public:
     double length() const override;
    
     const ExtrusionAttributes&  attributes() const { return m_attributes; }
+    ExtrusionAttributes&        attributes_mutable() { return m_attributes; }
     ExtrusionRole               role() const override { return m_attributes.role; }
     float                       width() const { return m_attributes.width; }
     float                       height() const { return m_attributes.height; }

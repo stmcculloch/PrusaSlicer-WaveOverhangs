@@ -25,6 +25,9 @@ TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverh
 
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
+    for (const ExtrusionPaths &paths : regions)
+        for (const ExtrusionPath &path : paths)
+            CHECK(path.attributes().wave_overhang);
 }
 
 TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhangs]")
