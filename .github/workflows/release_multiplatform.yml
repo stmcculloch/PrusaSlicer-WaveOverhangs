@@ -85,7 +85,7 @@ jobs:
 
   build_macos_bundle:
     name: Build macOS Bundle
-    runs-on: macos-13
+    runs-on: macos-15
 
     env:
       BUILD_DIR: ${{ github.workspace }}/build-release-macos
