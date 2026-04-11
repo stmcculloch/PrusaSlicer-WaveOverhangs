@@ -137,6 +137,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t base_spacing       = overhang_flow.scaled_spacing();
     const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
     const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
+    const bool    coarse_area_accounting = additional_shell_count > 0;
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
@@ -202,7 +203,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
             if (! fronts.empty()) {
                 extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
-                append(filled_area, intersection(offset(fronts, float(0.5 * wave_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
+                if (! coarse_area_accounting)
+                    append(filled_area, intersection(offset(fronts, float(0.5 * wave_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
             }
 
             accumulated_region = std::move(next_region);
@@ -212,7 +214,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         overhang_region.erase(
             std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
             overhang_region.end());
-        if (additional_shell_count > 0) {
+        if (coarse_area_accounting && ! overhang_region.empty()) {
+            append(filled_area, overhang_to_cover);
+        } else if (additional_shell_count > 0) {
             Polygons shell_inner_boundary = shrink(overhang_to_cover, shell_inner_edge, jtRound, 0.);
             append(filled_area, diff(overhang_to_cover, shell_inner_boundary));
         }
