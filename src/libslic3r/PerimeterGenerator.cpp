@@ -1001,6 +1001,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(Ex
         return WaveOverhangs::generate(
             infill_area, lower_slices_polygons, perimeter_count,
             region_config.wave_overhang_outer_perimeters.value,
+            region_config.wave_overhang_line_spacing.value,
             region_config.wave_overhang_line_width.value,
             overhang_flow, scaled_resolution);
     }

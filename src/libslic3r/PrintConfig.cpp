@@ -1160,15 +1160,23 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionInt(1));
 
-    def = this->add("wave_overhang_line_width", coFloat);
-    def->label = L("Wave overhang line width");
+    def = this->add("wave_overhang_line_spacing", coFloat);
+    def->label = L("Wave overhang line spacing");
     def->category = L("Extrusion Width");
-    def->tooltip = L("Explicit line width used as the wave wavelength for wave-overhang paths. "
-                     "Set to 0 to use the default overhang spacing.");
+    def->tooltip = L("Centerline spacing between adjacent wave-overhang lines. Smaller than the line width creates overlap. Set to 0 to use the default overhang spacing.");
     def->sidetext = L("mm");
     def->min = 0;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0.35));
+
+    def = this->add("wave_overhang_line_width", coFloat);
+    def->label = L("Wave overhang line width");
+    def->category = L("Extrusion Width");
+    def->tooltip = L("Extrusion width used for wave-overhang paths. Larger than the line spacing creates intentional overlap between adjacent waves. Set to 0 to use the default overhang extrusion width.");
+    def->sidetext = L("mm");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0.4));
 
     def = this->add("wave_overhang_print_speed", coFloat);
     def->label = L("Wave overhang print speed");

@@ -724,6 +724,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                 extra_perimeters_on_overhangs))
     ((ConfigOptionBool,                 wave_overhangs))
     ((ConfigOptionInt,                  wave_overhang_outer_perimeters))
+    ((ConfigOptionFloat,                wave_overhang_line_spacing))
     ((ConfigOptionFloat,                wave_overhang_line_width))
     ((ConfigOptionFloat,                wave_overhang_print_speed))
     ((ConfigOptionFloat,                wave_overhang_travel_speed))
