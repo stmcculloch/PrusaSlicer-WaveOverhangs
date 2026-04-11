@@ -48,6 +48,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DSLIC3R_STATIC=1 \
             -DSLIC3R_GTK=3 \
+            -DSLIC3R_BUILD_TESTS=OFF \
             -DSLIC3R_PCH=OFF \
             -DCMAKE_PREFIX_PATH="${DEPS_DESTDIR}/usr/local"
           cmake --build "${BUILD_DIR}" --parallel 2
@@ -125,6 +126,7 @@ jobs:
         run: |
           cmake -S . -B "${BUILD_DIR}" \
             -DCMAKE_BUILD_TYPE=Release \
+            -DSLIC3R_BUILD_TESTS=OFF \
             -DCMAKE_PREFIX_PATH="${DEPS_DESTDIR}/usr/local"
           cmake --build "${BUILD_DIR}" --parallel 1 --verbose
 
@@ -169,6 +171,7 @@ jobs:
 
     env:
       BUILD_CONFIG: RelWithDebInfo
+      BUILD_DIR: ${{ github.workspace }}\build-release-windows
       DEPS_DIR: ${{ github.workspace }}\deps-build
       BUNDLE_DIR: ${{ github.workspace }}\release\PrusaSlicer-WaveOverhangs-win64
 
@@ -176,10 +179,34 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build application and dependencies
+      - name: Configure dependencies
         shell: powershell
         run: |
-          .\build_win.bat -d "${env:DEPS_DIR}" -s all -r none -c "${env:BUILD_CONFIG}"
+          cmake -S .\deps -B .\deps\build -G "Visual Studio 17 2022" -A x64 -DDESTDIR="${env:DEPS_DIR}"
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build dependencies
+        shell: powershell
+        run: |
+          cmake --build .\deps\build --config "${env:BUILD_CONFIG}" --parallel
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Configure application
+        shell: powershell
+        run: |
+          cmake -S . -B "${env:BUILD_DIR}" -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="${env:DEPS_DIR}\usr\local" -DSLIC3R_BUILD_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build application
+        shell: powershell
+        run: |
+          cmake --build "${env:BUILD_DIR}" --config "${env:BUILD_CONFIG}" --parallel
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
@@ -190,7 +217,7 @@ jobs:
           if (Test-Path "${env:BUNDLE_DIR}") {
             Remove-Item -LiteralPath "${env:BUNDLE_DIR}" -Recurse -Force
           }
-          cmake --install build --config "${env:BUILD_CONFIG}" --prefix "${env:BUNDLE_DIR}"
+          cmake --install "${env:BUILD_DIR}" --config "${env:BUILD_CONFIG}" --prefix "${env:BUNDLE_DIR}"
           if ($LASTEXITCODE -ne 0) {
             exit $LASTEXITCODE
           }
