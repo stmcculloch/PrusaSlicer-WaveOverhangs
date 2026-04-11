@@ -210,7 +210,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_legacy_geometry(
     std::vector<ExtrusionPaths> wave_paths;
     Polygons                    filled_area;
 
-    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+    for (const ExPolygon &overhang : union_ex(inset_overhang_area)) {
         if (intersection(to_polygons(overhang), overhangs).empty())
             continue;
 
@@ -289,7 +289,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_parametric_geometry(
     std::vector<ExtrusionPaths> wave_paths;
     Polygons                    filled_area;
 
-    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+    for (const ExPolygon &overhang : union_ex(inset_overhang_area)) {
         if (intersection(to_polygons(overhang), overhangs).empty())
             continue;
 
