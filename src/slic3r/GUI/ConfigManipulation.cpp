@@ -288,6 +288,11 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig* config)
                     "perimeter_speed", "small_perimeter_speed", "external_perimeter_speed", "enable_dynamic_overhang_speeds"})
         toggle_field(el, have_perimeters);
 
+    const bool have_wave_overhangs = have_perimeters && config->opt_bool("wave_overhangs");
+    for (auto el : { "wave_overhang_outer_perimeters", "wave_overhang_nozzle_overlap", "wave_overhang_print_speed",
+                     "wave_overhang_travel_speed" })
+        toggle_field(el, have_wave_overhangs);
+
     for (size_t i = 0; i < 4; i++) {
         toggle_field("overhang_speed_" + std::to_string(i), config->opt_bool("enable_dynamic_overhang_speeds"));
     }

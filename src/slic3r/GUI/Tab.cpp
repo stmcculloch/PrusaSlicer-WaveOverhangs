@@ -1467,6 +1467,7 @@ void TabPrint::build()
         optgroup->append_single_option_line("extra_perimeters", category_path + "extra-perimeters-if-needed");
         optgroup->append_single_option_line("extra_perimeters_on_overhangs", category_path + "extra-perimeters-on-overhangs");
         optgroup->append_single_option_line("wave_overhangs", category_path + "use-wave-overhangs");
+        optgroup->append_single_option_line("wave_overhang_outer_perimeters");
         optgroup->append_single_option_line("ensure_vertical_shell_thickness", category_path + "ensure-vertical-shell-thickness");
         optgroup->append_single_option_line("avoid_crossing_curled_overhangs", category_path + "avoid-crossing-curled-overhangs");
         optgroup->append_single_option_line("avoid_crossing_perimeters", category_path + "avoid-crossing-perimeters");
@@ -1616,6 +1617,10 @@ void TabPrint::build()
         optgroup->append_single_option_line("overhang_speed_2");
         optgroup->append_single_option_line("overhang_speed_3");
 
+        optgroup = page->new_optgroup(L("Wave overhangs"));
+        optgroup->append_single_option_line("wave_overhang_print_speed");
+        optgroup->append_single_option_line("wave_overhang_travel_speed");
+
         optgroup = page->new_optgroup(L("Speed for non-print moves"));
         optgroup->append_single_option_line("travel_speed");
         optgroup->append_single_option_line("travel_speed_z");
@@ -1698,6 +1703,7 @@ void TabPrint::build()
 
         optgroup = page->new_optgroup(L("Overlap"));
         optgroup->append_single_option_line("infill_overlap");
+        optgroup->append_single_option_line("wave_overhang_nozzle_overlap");
 
         optgroup = page->new_optgroup(L("Flow"));
         optgroup->append_single_option_line("bridge_flow_ratio");
@@ -2269,6 +2275,7 @@ void TabFilament::build()
         optgroup->append_line(line);
 
         optgroup->append_single_option_line("bridge_fan_speed", category_path + "fan-settings");
+        optgroup->append_single_option_line("wave_overhang_fan_speed", category_path + "fan-settings");
         optgroup->append_single_option_line("disable_fan_first_layers", category_path + "fan-settings");
         optgroup->append_single_option_line("full_fan_speed_layer", category_path + "fan-settings");
 
@@ -2460,6 +2467,9 @@ void TabFilament::toggle_options()
 
         for (auto el : { "min_fan_speed", "disable_fan_first_layers", "full_fan_speed_layer" })
             toggle_option(el, fan_always_on);
+
+        const bool wave_overhangs = m_preset_bundle->prints.get_edited_preset().config.opt_bool("wave_overhangs");
+        toggle_option("wave_overhang_fan_speed", wave_overhangs);
 
         bool dynamic_fan_speeds = m_config->opt_bool("enable_dynamic_fan_speeds", 0);
         for (int i = 0; i < 4; i++) {

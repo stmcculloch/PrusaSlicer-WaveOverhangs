@@ -19,6 +19,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     ExPolygons      infill_area,
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
+    int             outer_perimeter_count,
+    double          nozzle_overlap_percent,
     const Flow     &overhang_flow,
     double          scaled_resolution);
 

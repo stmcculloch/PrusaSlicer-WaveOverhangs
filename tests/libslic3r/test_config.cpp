@@ -99,13 +99,30 @@ TEST_CASE("Get keys", "[Config]"){
 }
 
 TEST_CASE("Wave overhangs config plumbing", "[Config]") {
-    DynamicPrintConfig config = DynamicPrintConfig::full_print_config_with({ { "wave_overhangs", 1 } });
+    DynamicPrintConfig config = DynamicPrintConfig::full_print_config_with({
+        { "wave_overhangs", 1 },
+        { "wave_overhang_outer_perimeters", 2 },
+        { "wave_overhang_nozzle_overlap", 20.0 },
+        { "wave_overhang_print_speed", 3.0 },
+        { "wave_overhang_travel_speed", 45.0 },
+        { "wave_overhang_fan_speed", 90 }
+    });
     CHECK(config.opt_bool("wave_overhangs"));
     CHECK(config.opt_serialize("wave_overhangs") == "1");
+    CHECK(config.opt_int("wave_overhang_outer_perimeters") == 2);
+    CHECK(config.opt_float("wave_overhang_nozzle_overlap") == Approx(20.0));
+    CHECK(config.opt_float("wave_overhang_print_speed") == Approx(3.0));
+    CHECK(config.opt_float("wave_overhang_travel_speed") == Approx(45.0));
+    CHECK(config.opt_int("wave_overhang_fan_speed") == 90);
 
     FullPrintConfig applied;
     applied.apply(config, true);
     CHECK(applied.wave_overhangs.value);
+    CHECK(applied.wave_overhang_outer_perimeters.value == 2);
+    CHECK(applied.wave_overhang_nozzle_overlap.value == Approx(20.0));
+    CHECK(applied.wave_overhang_print_speed.value == Approx(3.0));
+    CHECK(applied.wave_overhang_travel_speed.value == Approx(45.0));
+    CHECK(applied.wave_overhang_fan_speed.value == 90);
 }
 
 TEST_CASE("Set not already set option", "[Config]") {

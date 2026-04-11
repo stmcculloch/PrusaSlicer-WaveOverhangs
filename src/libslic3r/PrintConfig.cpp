@@ -1152,6 +1152,53 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionBool(false));
 
+    def = this->add("wave_overhang_outer_perimeters", coInt);
+    def->label = L("Outer perimeters during wave overhangs");
+    def->category = L("Layers and Perimeters");
+    def->tooltip = L("Number of regular outer perimeter passes to keep at the end of wave-overhang regions.");
+    def->min = 1;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionInt(1));
+
+    def = this->add("wave_overhang_nozzle_overlap", coFloat);
+    def->label = L("Wave overhang nozzle overlap");
+    def->category = L("Overlap");
+    def->tooltip = L("Overlap between neighboring wave-overhang lines, expressed as a percentage of the wave-overhang extrusion width. "
+                     "This reduces the effective wave spacing while keeping the extrusion width unchanged.");
+    def->sidetext = L("%");
+    def->min = 0;
+    def->max = 95;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(12.5));
+
+    def = this->add("wave_overhang_print_speed", coFloat);
+    def->label = L("Wave overhang print speed");
+    def->category = L("Speed");
+    def->tooltip = L("Print speed used for wave-overhang extrusion paths.");
+    def->sidetext = L("mm/s");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(2));
+
+    def = this->add("wave_overhang_travel_speed", coFloat);
+    def->label = L("Wave overhang travel speed");
+    def->category = L("Speed");
+    def->tooltip = L("Travel speed used for moves between wave-overhang lines.");
+    def->sidetext = L("mm/s");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(40));
+
+    def = this->add("wave_overhang_fan_speed", coInt);
+    def->label = L("Wave overhang fan speed");
+    def->category = L("Cooling");
+    def->tooltip = L("Fan speed enforced while printing wave-overhang paths.");
+    def->sidetext = L("%");
+    def->min = 0;
+    def->max = 100;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionInt(100));
+
     def = this->add("extruder", coInt);
     def->label = L("Extruder");
     def->category = L("Extruders");

@@ -725,6 +725,8 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "extra_perimeters"
             || opt_key == "extra_perimeters_on_overhangs"
             || opt_key == "wave_overhangs"
+            || opt_key == "wave_overhang_outer_perimeters"
+            || opt_key == "wave_overhang_nozzle_overlap"
             || opt_key == "first_layer_extrusion_width"
             || opt_key == "perimeter_extrusion_width"
             || opt_key == "infill_overlap"
@@ -928,7 +930,9 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "small_perimeter_speed"
             || opt_key == "solid_infill_speed"
             || opt_key == "first_layer_infill_speed"
-            || opt_key == "top_solid_infill_speed") {
+            || opt_key == "top_solid_infill_speed"
+            || opt_key == "wave_overhang_print_speed"
+            || opt_key == "wave_overhang_travel_speed") {
             invalidated |= m_print->invalidate_step(psGCodeExport);
         } else if (
                opt_key == "wipe_into_infill"

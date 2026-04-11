@@ -3292,7 +3292,7 @@ std::string GCodeGenerator::travel_to_first_position(const Vec3crd& point, const
     if (!EXTRUDER_CONFIG(travel_ramping_lift) && this->last_position) {
         const Vec3crd from{to_3d(*this->last_position, scaled(from_z))};
         gcode = this->travel_to(
-            from, point, role, "travel to first layer point", insert_gcode, EnforceFirstZ::True
+            from, point, role, "travel to first layer point", insert_gcode, -1., EnforceFirstZ::True
         );
     } else {
         double lift{
@@ -3360,6 +3360,8 @@ std::string GCodeGenerator::_extrude(
 {
     std::string gcode;
     const std::string_view description_bridge = path_attr.role.is_bridge() ? " (bridge)"sv : ""sv;
+    const double wave_travel_speed = path_attr.wave_overhang && m_config.wave_overhang_travel_speed.value > 0 ?
+        m_config.wave_overhang_travel_speed.value : -1.;
 
     const bool has_active_instance{m_label_objects.has_active_instance()};
     if (m_writer.multiple_extruders && has_active_instance) {
@@ -3371,7 +3373,7 @@ std::string GCodeGenerator::_extrude(
         const std::string comment{"move to print after unknown position"};
         gcode += this->retract_and_wipe();
         gcode += m_writer.multiple_extruders ? "" : m_label_objects.maybe_change_instance(m_writer);
-        gcode += this->m_writer.travel_to_xy(this->point_to_gcode(path.front().point), comment);
+        gcode += this->m_writer.travel_to_xy(this->point_to_gcode(path.front().point), comment, wave_travel_speed);
         gcode += this->m_writer.travel_to_z_force(z, comment);
     } else if ( this->last_position != path.front().point) {
         std::string comment = "move to first ";
@@ -3382,7 +3384,7 @@ std::string GCodeGenerator::_extrude(
         const Vec3crd to{to_3d(path.front().point, scaled(this->m_last_layer_z + (path.front().height_fraction - 1.0) * path_attr.height))};
         const std::string travel_gcode{this->travel_to(from, to, path_attr.role, comment, [this](){
             return m_writer.multiple_extruders ? "" : m_label_objects.maybe_change_instance(m_writer);
-        })};
+        }, wave_travel_speed)};
         gcode += travel_gcode;
     }
 
@@ -3491,6 +3493,10 @@ std::string GCodeGenerator::_extrude(
         speed = dynamic_print_and_fan_speeds.print_speed;
     }
 
+    if (path_attr.wave_overhang && m_config.wave_overhang_print_speed.value > 0) {
+        speed = m_config.wave_overhang_print_speed.value;
+    }
+
     // cap speed with max_volumetric_speed anyway (even if user is not using autospeed)
     speed = cap_speed(speed, m_config, m_writer.extruder()->id(), path_attr);
 
@@ -3557,6 +3563,10 @@ std::string GCodeGenerator::_extrude(
 
     // F is mm per minute.
     gcode += m_writer.set_speed(F, "", cooling_marker_setspeed_comments);
+
+    if (path_attr.wave_overhang) {
+        dynamic_print_and_fan_speeds.fan_speed = float(std::clamp(m_config.wave_overhang_fan_speed.value, 0, 100));
+    }
 
     if (dynamic_print_and_fan_speeds.fan_speed >= 0) {
         const int fan_speed = int(dynamic_print_and_fan_speeds.fan_speed);
@@ -3646,6 +3656,7 @@ std::string GCodeGenerator::generate_travel_gcode(
     const std::string& comment,
     const std::function<std::string()>& insert_gcode,
     const EnforceFirstZ enforce_first_z,
+    double travel_speed_override,
     const std::function<bool()>& use_short_distance_acceleration
 ) {
     if (travel.empty()) {
@@ -3677,10 +3688,10 @@ std::string GCodeGenerator::generate_travel_gcode(
             ) {
                 gcode += this->m_writer.travel_to_z_force(gcode_point.z(), comment);
             } else {
-                gcode += this->m_writer.travel_to_xyz_force(gcode_point, comment);
+                gcode += this->m_writer.travel_to_xyz_force(gcode_point, comment, travel_speed_override);
             }
         } else {
-            gcode += this->m_writer.travel_to_xyz(gcode_point, comment);
+            gcode += this->m_writer.travel_to_xyz(gcode_point, comment, travel_speed_override);
         }
 
         this->last_position = point.head<2>();
@@ -3788,6 +3799,7 @@ std::string GCodeGenerator::travel_to(
     ExtrusionRole role,
     const std::string &comment,
     const std::function<std::string()>& insert_gcode,
+    double travel_speed_override,
     const GCodeGenerator::EnforceFirstZ enforce_first_z
 ) {
     const double initial_elevation{unscaled(start_point.z())};
@@ -3856,12 +3868,12 @@ std::string GCodeGenerator::travel_to(
     travel.emplace_back(end_point);
 
     if (this->config().travel_short_distance_acceleration > 0.) {
-        return wipe_retract_gcode + generate_travel_gcode(travel, comment, insert_gcode, enforce_first_z, [&]() {
+        return wipe_retract_gcode + generate_travel_gcode(travel, comment, insert_gcode, enforce_first_z, travel_speed_override, [&]() {
                    return role.is_external_perimeter() && xy_path.length() < scaled<double>(EXTRUDER_CONFIG(retract_before_travel));
                });
     }
 
-    return wipe_retract_gcode + generate_travel_gcode(travel, comment, insert_gcode, enforce_first_z);
+    return wipe_retract_gcode + generate_travel_gcode(travel, comment, insert_gcode, enforce_first_z, travel_speed_override);
 }
 
 std::string GCodeGenerator::retract_and_wipe(bool toolchange, bool reset_e)

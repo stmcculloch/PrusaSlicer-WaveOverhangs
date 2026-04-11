@@ -992,13 +992,17 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(Ex
                                                                               int                      perimeter_count,
                                                                               const Flow              &overhang_flow,
                                                                               double                   scaled_resolution,
+                                                                              const PrintRegionConfig &region_config,
                                                                               const PrintObjectConfig &object_config,
                                                                               const PrintConfig       &print_config,
                                                                               bool                     use_wave_overhangs)
 {
     if (use_wave_overhangs) {
         auto [wave_paths, filled_area] = WaveOverhangs::generate(
-            infill_area, lower_slices_polygons, perimeter_count, overhang_flow, scaled_resolution);
+            infill_area, lower_slices_polygons, perimeter_count,
+            region_config.wave_overhang_outer_perimeters.value,
+            region_config.wave_overhang_nozzle_overlap.value,
+            overhang_flow, scaled_resolution);
         if (! wave_paths.empty())
             return { std::move(wave_paths), std::move(filled_area) };
     }
@@ -1185,6 +1189,7 @@ void PerimeterGenerator::process_arachne(
                                                                            lower_slices_polygons_cache,
                                                                            loop_number + 1,
                                                                            params.overhang_flow, params.scaled_resolution,
+                                                                           params.config,
                                                                            params.object_config, params.print_config,
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
@@ -1555,6 +1560,7 @@ void PerimeterGenerator::process_classic(
                                                                            lower_slices_polygons_cache,
                                                                            loop_number + 1,
                                                                            params.overhang_flow, params.scaled_resolution,
+                                                                           params.config,
                                                                            params.object_config, params.print_config,
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {

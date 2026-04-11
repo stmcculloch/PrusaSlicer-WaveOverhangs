@@ -654,8 +654,13 @@ inline bool has_compatible_layer_regions(const PrintRegionConfig &config, const 
            config.perimeters                                            == other_config.perimeters &&
            config.perimeter_speed                                       == other_config.perimeter_speed &&
            config.external_perimeter_speed                              == other_config.external_perimeter_speed &&
+           config.wave_overhang_print_speed                             == other_config.wave_overhang_print_speed &&
+           config.wave_overhang_travel_speed                            == other_config.wave_overhang_travel_speed &&
            (config.gap_fill_enabled ? config.gap_fill_speed.value : 0.) == (other_config.gap_fill_enabled ? other_config.gap_fill_speed.value : 0.) &&
            config.overhangs                                             == other_config.overhangs &&
+           config.wave_overhangs                                        == other_config.wave_overhangs &&
+           config.wave_overhang_outer_perimeters                        == other_config.wave_overhang_outer_perimeters &&
+           config.wave_overhang_nozzle_overlap                          == other_config.wave_overhang_nozzle_overlap &&
            config.opt_serialize("perimeter_extrusion_width")     == other_config.opt_serialize("perimeter_extrusion_width") &&
            config.thin_walls                                            == other_config.thin_walls &&
            config.external_perimeters_first                             == other_config.external_perimeters_first &&

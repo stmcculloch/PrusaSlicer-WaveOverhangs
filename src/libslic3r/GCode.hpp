@@ -339,6 +339,7 @@ private:
         const std::string& comment,
         const std::function<std::string()>& insert_gcode,
         const EnforceFirstZ enforce_first_z = EnforceFirstZ::False,
+        double travel_speed_override = -1.,
         const std::function<bool()>& use_short_distance_acceleration = []() { return false; }
     );
     Polyline generate_travel_xy_path(
@@ -354,6 +355,7 @@ private:
         ExtrusionRole role,
         const std::string &comment,
         const std::function<std::string()>& insert_gcode,
+        double travel_speed_override = -1.,
         const EnforceFirstZ enforce_first_z = EnforceFirstZ::False
     );
 
