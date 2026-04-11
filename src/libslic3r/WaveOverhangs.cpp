@@ -28,6 +28,30 @@ enum class PropagationMode {
     Cumulative
 };
 
+void generate_direct_toolpath_lines(const ExPolygon  &overhang,
+                                    const ExPolygon  &boundary_a,
+                                    const ExPolygons &trim_boundary,
+                                    const Polylines  &seed_lines,
+                                    const coord_t     wave_spacing,
+                                    ExtrusionPaths   &overhang_region,
+                                    Polygons         &filled_area,
+                                    const Flow       &overhang_flow,
+                                    const double      fit_tolerance,
+                                    const double      min_length);
+
+void generate_cumulative_toolpath_lines(const ExPolygon  &overhang,
+                                        const ExPolygon  &boundary_a,
+                                        const ExPolygons &trim_boundary,
+                                        const Polylines  &seed_lines,
+                                        const coord_t     line_buffer_eps,
+                                        const coord_t     wave_spacing,
+                                        ExtrusionPaths   &overhang_region,
+                                        Polygons         &filled_area,
+                                        const Flow       &overhang_flow,
+                                        const double      fit_tolerance,
+                                        const double      min_length,
+                                        const double      min_new_area);
+
 bool try_merge_polylines(Polyline &base, Polyline &other)
 {
     if (base.empty() || other.empty())
@@ -149,6 +173,165 @@ void append_fronts_to_extrusions(ExtrusionPaths    &overhang_region,
     append(filled_area, intersection(offset(fronts, float(0.5 * overhang_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang));
 }
 
+void tag_wave_overhang_paths(std::vector<ExtrusionPaths> &wave_paths)
+{
+    for (ExtrusionPaths &region : wave_paths)
+        for (ExtrusionPath &path : region)
+            path.attributes_mutable().wave_overhang = true;
+}
+
+std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_legacy_geometry(
+    ExPolygons      infill_area,
+    const Polygons &lower_slices_polygons,
+    int             perimeter_count,
+    const Flow     &overhang_flow,
+    double          scaled_resolution)
+{
+    const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), overhang_flow.scaled_spacing() * (perimeter_count + 1));
+    const coord_t tiny_expansion     = std::max<coord_t>(1, overhang_flow.scaled_spacing() / 20);
+    const coord_t line_buffer_eps    = std::max<coord_t>(1, overhang_flow.scaled_spacing() / 50);
+    const coord_t inset_a_distance   = std::max<coord_t>(1, overhang_flow.scaled_spacing() / 2);
+    const coord_t inset_b_distance   = std::max<coord_t>(1, overhang_flow.scaled_spacing());
+    const double  fit_tolerance      = std::max(1.0, std::min(scaled_resolution, toolpath_fit_tolerance_factor * double(overhang_flow.scaled_spacing())));
+    const double  min_length         = 0.6 * double(overhang_flow.scaled_spacing());
+    const double  min_new_area       = std::max(1.0, 3.0 * double(line_buffer_eps) * double(line_buffer_eps));
+
+    BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
+    Polygons    optimized_lower      = ClipperUtils::clip_clipper_polygons_with_subject_bbox(lower_slices_polygons, infill_area_bb);
+    Polygons    overhangs            = diff(infill_area, optimized_lower);
+
+    if (overhangs.empty())
+        return {};
+
+    Polygons   anchors             = intersection(infill_area, optimized_lower);
+    Polygons   inset_anchors       = diff(anchors, expand(overhangs, anchors_size + 0.1 * overhang_flow.scaled_width(), EXTRA_PERIMETER_OFFSET_PARAMETERS));
+    ExPolygons inset_overhang_area = diff_ex(infill_area, inset_anchors);
+
+    std::vector<ExtrusionPaths> wave_paths;
+    Polygons                    filled_area;
+
+    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+        if (intersection(to_polygons(overhang), overhangs).empty())
+            continue;
+
+        ExPolygons boundary_a = build_inset_boundary(overhang, inset_a_distance);
+        ExPolygons boundary_b = build_inset_boundary(overhang, inset_b_distance);
+        Polygons   anchoring  = intersection(expand(to_polygons(overhang), 1.1 * overhang_flow.scaled_spacing(), jtRound, 0.), inset_anchors);
+
+        std::vector<Polylines> seeds_per_boundary = generate_seed_lines(boundary_a, anchoring, tiny_expansion);
+        for (size_t boundary_idx = 0; boundary_idx < boundary_a.size(); ++boundary_idx) {
+            Polylines &seed_lines = seeds_per_boundary[boundary_idx];
+            if (seed_lines.empty())
+                continue;
+
+            ExPolygons trim_boundary = intersection_ex(ExPolygons{ boundary_a[boundary_idx] }, boundary_b);
+            if (trim_boundary.empty())
+                trim_boundary = ExPolygons{ boundary_a[boundary_idx] };
+
+            ExtrusionPaths &overhang_region = wave_paths.emplace_back();
+            const PropagationMode mode = boundary_a[boundary_idx].holes.empty() ? PropagationMode::DirectDistance : PropagationMode::Cumulative;
+
+            if (mode == PropagationMode::DirectDistance) {
+                generate_direct_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, overhang_flow.scaled_spacing(), overhang_region, filled_area,
+                    overhang_flow, fit_tolerance, min_length);
+            } else {
+                generate_cumulative_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, line_buffer_eps, overhang_flow.scaled_spacing(), overhang_region,
+                    filled_area, overhang_flow, fit_tolerance, min_length, min_new_area);
+            }
+
+            overhang_region.erase(
+                std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
+                overhang_region.end());
+            if (overhang_region.empty())
+                wave_paths.pop_back();
+        }
+    }
+
+    return { wave_paths, union_(filled_area) };
+}
+
+std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_parametric_geometry(
+    ExPolygons      infill_area,
+    const Polygons &lower_slices_polygons,
+    int             perimeter_count,
+    int             outer_perimeter_count,
+    double          nozzle_overlap_percent,
+    const Flow     &overhang_flow,
+    double          scaled_resolution)
+{
+    const coord_t base_spacing       = overhang_flow.scaled_spacing();
+    coord_t       wave_spacing       = base_spacing;
+    const double  overlap_fraction   = std::clamp(nozzle_overlap_percent, 0.0, 95.0) / 100.0;
+    const coord_t overlap_distance   = coord_t(std::llround(double(overhang_flow.scaled_width()) * overlap_fraction));
+    wave_spacing = std::max<coord_t>(1, base_spacing - overlap_distance);
+
+    const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), wave_spacing * (perimeter_count + 1));
+    const coord_t tiny_expansion     = std::max<coord_t>(1, wave_spacing / 20);
+    const coord_t line_buffer_eps    = std::max<coord_t>(1, wave_spacing / 50);
+    const coord_t inset_a_distance   = std::max<coord_t>(1, wave_spacing / 2);
+    const coord_t inset_b_distance   = std::max<coord_t>(1, wave_spacing * std::max(1, outer_perimeter_count));
+    const double  fit_tolerance      = std::max(1.0, std::min(scaled_resolution, toolpath_fit_tolerance_factor * double(wave_spacing)));
+    const double  min_length         = 0.6 * double(wave_spacing);
+    const double  min_new_area       = std::max(1.0, 3.0 * double(line_buffer_eps) * double(line_buffer_eps));
+
+    BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
+    Polygons    optimized_lower      = ClipperUtils::clip_clipper_polygons_with_subject_bbox(lower_slices_polygons, infill_area_bb);
+    Polygons    overhangs            = diff(infill_area, optimized_lower);
+
+    if (overhangs.empty())
+        return {};
+
+    Polygons   anchors             = intersection(infill_area, optimized_lower);
+    Polygons   inset_anchors       = diff(anchors, expand(overhangs, anchors_size + 0.1 * overhang_flow.scaled_width(), EXTRA_PERIMETER_OFFSET_PARAMETERS));
+    ExPolygons inset_overhang_area = diff_ex(infill_area, inset_anchors);
+
+    std::vector<ExtrusionPaths> wave_paths;
+    Polygons                    filled_area;
+
+    for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
+        if (intersection(to_polygons(overhang), overhangs).empty())
+            continue;
+
+        ExPolygons boundary_a = build_inset_boundary(overhang, inset_a_distance);
+        ExPolygons boundary_b = build_inset_boundary(overhang, inset_b_distance);
+        Polygons   anchoring  = intersection(expand(to_polygons(overhang), 1.1 * wave_spacing, jtRound, 0.), inset_anchors);
+
+        std::vector<Polylines> seeds_per_boundary = generate_seed_lines(boundary_a, anchoring, tiny_expansion);
+        for (size_t boundary_idx = 0; boundary_idx < boundary_a.size(); ++boundary_idx) {
+            Polylines &seed_lines = seeds_per_boundary[boundary_idx];
+            if (seed_lines.empty())
+                continue;
+
+            ExPolygons trim_boundary = intersection_ex(ExPolygons{ boundary_a[boundary_idx] }, boundary_b);
+            if (trim_boundary.empty())
+                trim_boundary = ExPolygons{ boundary_a[boundary_idx] };
+
+            ExtrusionPaths &overhang_region = wave_paths.emplace_back();
+            const PropagationMode mode = boundary_a[boundary_idx].holes.empty() ? PropagationMode::DirectDistance : PropagationMode::Cumulative;
+
+            if (mode == PropagationMode::DirectDistance) {
+                generate_direct_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, wave_spacing, overhang_region, filled_area,
+                    overhang_flow, fit_tolerance, min_length);
+            } else {
+                generate_cumulative_toolpath_lines(
+                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, line_buffer_eps, wave_spacing, overhang_region,
+                    filled_area, overhang_flow, fit_tolerance, min_length, min_new_area);
+            }
+
+            overhang_region.erase(
+                std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
+                overhang_region.end());
+            if (overhang_region.empty())
+                wave_paths.pop_back();
+        }
+    }
+
+    return { wave_paths, union_(filled_area) };
+}
+
 void generate_direct_toolpath_lines(const ExPolygon  &overhang,
                                         const ExPolygon  &boundary_a,
                                         const ExPolygons &trim_boundary,
@@ -229,85 +412,14 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Flow     &overhang_flow,
     double          scaled_resolution)
 {
-    const coord_t base_spacing       = overhang_flow.scaled_spacing();
-    const bool    use_base_geometry  = outer_perimeter_count <= 1 && nozzle_overlap_percent <= 0.;
+    const bool use_legacy_geometry = outer_perimeter_count <= 1 && nozzle_overlap_percent <= 0.;
+    auto result = use_legacy_geometry ?
+        generate_legacy_geometry(std::move(infill_area), lower_slices_polygons, perimeter_count, overhang_flow, scaled_resolution) :
+        generate_parametric_geometry(std::move(infill_area), lower_slices_polygons, perimeter_count, outer_perimeter_count,
+                                     nozzle_overlap_percent, overhang_flow, scaled_resolution);
 
-    coord_t wave_spacing       = base_spacing;
-    coord_t inset_b_distance   = std::max<coord_t>(1, base_spacing);
-    if (! use_base_geometry) {
-        const double overlap_fraction = std::clamp(nozzle_overlap_percent, 0.0, 95.0) / 100.0;
-        const coord_t overlap_distance = coord_t(std::llround(double(overhang_flow.scaled_width()) * overlap_fraction));
-        wave_spacing = std::max<coord_t>(1, base_spacing - overlap_distance);
-        inset_b_distance = std::max<coord_t>(1, wave_spacing * std::max(1, outer_perimeter_count));
-    }
-
-    const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), wave_spacing * (perimeter_count + 1));
-    const coord_t tiny_expansion     = std::max<coord_t>(1, wave_spacing / 20);
-    const coord_t line_buffer_eps    = std::max<coord_t>(1, wave_spacing / 50);
-    const coord_t inset_a_distance   = std::max<coord_t>(1, wave_spacing / 2);
-    const double  fit_tolerance      = std::max(1.0, std::min(scaled_resolution, toolpath_fit_tolerance_factor * double(wave_spacing)));
-    const double  min_length         = 0.6 * double(wave_spacing);
-    const double  min_new_area       = std::max(1.0, 3.0 * double(line_buffer_eps) * double(line_buffer_eps));
-
-    BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
-    Polygons    optimized_lower      = ClipperUtils::clip_clipper_polygons_with_subject_bbox(lower_slices_polygons, infill_area_bb);
-    Polygons    overhangs            = diff(infill_area, optimized_lower);
-
-    if (overhangs.empty())
-        return {};
-
-    Polygons   anchors             = intersection(infill_area, optimized_lower);
-    Polygons   inset_anchors       = diff(anchors, expand(overhangs, anchors_size + 0.1 * overhang_flow.scaled_width(), EXTRA_PERIMETER_OFFSET_PARAMETERS));
-    ExPolygons inset_overhang_area = diff_ex(infill_area, inset_anchors);
-
-    std::vector<ExtrusionPaths> wave_paths;
-    Polygons                    filled_area;
-
-    for (const ExPolygon &overhang : union_ex(inset_overhang_area)) {
-        if (intersection(to_polygons(overhang), overhangs).empty())
-            continue;
-
-        ExPolygons boundary_a = build_inset_boundary(overhang, inset_a_distance);
-        ExPolygons boundary_b = build_inset_boundary(overhang, inset_b_distance);
-        Polygons   anchoring  = intersection(expand(to_polygons(overhang), 1.1 * wave_spacing, jtRound, 0.), inset_anchors);
-
-        std::vector<Polylines> seeds_per_boundary = generate_seed_lines(boundary_a, anchoring, tiny_expansion);
-        for (size_t boundary_idx = 0; boundary_idx < boundary_a.size(); ++boundary_idx) {
-            Polylines &seed_lines = seeds_per_boundary[boundary_idx];
-            if (seed_lines.empty())
-                continue;
-
-            ExPolygons trim_boundary = intersection_ex(ExPolygons{ boundary_a[boundary_idx] }, boundary_b);
-            if (trim_boundary.empty())
-                trim_boundary = ExPolygons{ boundary_a[boundary_idx] };
-
-            ExtrusionPaths &overhang_region = wave_paths.emplace_back();
-            const PropagationMode mode = boundary_a[boundary_idx].holes.empty() ? PropagationMode::DirectDistance : PropagationMode::Cumulative;
-
-            if (mode == PropagationMode::DirectDistance) {
-                generate_direct_toolpath_lines(
-                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, wave_spacing, overhang_region, filled_area,
-                    overhang_flow, fit_tolerance, min_length);
-            } else {
-                generate_cumulative_toolpath_lines(
-                    overhang, boundary_a[boundary_idx], trim_boundary, seed_lines, line_buffer_eps, wave_spacing, overhang_region,
-                    filled_area, overhang_flow, fit_tolerance, min_length, min_new_area);
-            }
-
-            overhang_region.erase(
-                std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
-                overhang_region.end());
-            if (overhang_region.empty()) {
-                wave_paths.pop_back();
-                continue;
-            }
-
-            for (ExtrusionPath &path : overhang_region)
-                path.attributes_mutable().wave_overhang = true;
-        }
-    }
-
-    return { wave_paths, union_(filled_area) };
+    tag_wave_overhang_paths(std::get<0>(result));
+    return result;
 }
 
 } // namespace Slic3r::WaveOverhangs
