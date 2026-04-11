@@ -3,6 +3,22 @@
 
 # PrusaSlicer
 
+## Wave overhangs
+
+Wave overhangs is an experimental perimeter-stage feature for unsupported overhang regions. Instead of using the legacy extra-overhang perimeter fill, it generates custom wave-style overhang toolpaths over the same detected unsupported area. The feature runs inside perimeter generation, reports the area it filled back to the slicer, and preserves normal overhang-perimeter semantics for preview and G-code classification.
+
+Available settings:
+
+* `Use wave overhangs (Experimental)`: Enables the wave-overhang path in place of legacy extra overhang perimeters.
+* `Outer perimeters during wave overhangs`: Total number of regular perimeter shells to keep over the overhanging region. This replaces the normal vertical-shell perimeter count inside the reclaimed overhang area instead of adding to it.
+* `Wave overhang line spacing`: Centerline spacing between adjacent wave lines. This is the wave wavelength. Smaller spacing packs the wave fronts more tightly.
+* `Wave overhang line width`: Physical extrusion width used for wave paths. This changes extrusion amount and lets adjacent unsupported wave lines overlap for better lateral adhesion.
+* `Wave overhang print speed`: Print speed used while extruding wave-overhang paths.
+* `Wave overhang travel speed`: Travel speed used for moves between wave-overhang lines.
+* `Wave overhang fan speed`: Fan speed enforced while printing wave-overhang paths.
+
+The current implementation keeps the support/anchor detection tied to the normal overhang flow, while line spacing and line width control the wave toolpaths themselves.
+
 You may want to check the [PrusaSlicer project page](https://www.prusa3d.com/prusaslicer/).
 Prebuilt Windows, OSX and Linux binaries are available through the [git releases page](https://github.com/prusa3d/PrusaSlicer/releases) or from the [Prusa3D downloads page](https://www.prusa3d.com/drivers/). There are also [3rd party Linux builds available](https://github.com/prusa3d/PrusaSlicer/wiki/PrusaSlicer-on-Linux---binary-distributions).
 

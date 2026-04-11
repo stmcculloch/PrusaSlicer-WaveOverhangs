@@ -97,7 +97,6 @@ void tag_wave_overhang_paths(std::vector<ExtrusionPaths> &wave_paths)
 }
 
 void append_shell_perimeters(ExtrusionPaths &overhang_region,
-                             Polygons       &filled_area,
                              const Polygons &overhang_to_cover,
                              int             outer_perimeter_count,
                              coord_t         perimeter_spacing,
@@ -115,12 +114,9 @@ void append_shell_perimeters(ExtrusionPaths &overhang_region,
         shell_loops.erase(
             std::remove_if(shell_loops.begin(), shell_loops.end(), [](const Polyline &loop) { return loop.points.size() < 2; }),
             shell_loops.end());
-        shell_loops = reconnect_polylines(shell_loops, perimeter_spacing);
 
-        if (! shell_loops.empty()) {
+        if (! shell_loops.empty())
             extrusion_paths_append(overhang_region, shell_loops, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, perimeter_flow });
-            append(filled_area, intersection(offset(shell_loops, float(0.5 * perimeter_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
-        }
 
         shell_centerline = shrink(shell_centerline, perimeter_spacing, jtRound, 0.);
     }
@@ -216,7 +212,11 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         overhang_region.erase(
             std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
             overhang_region.end());
-        append_shell_perimeters(overhang_region, filled_area, overhang_to_cover, additional_shell_count, base_spacing, overhang_flow, scaled_resolution);
+        if (additional_shell_count > 0) {
+            Polygons shell_inner_boundary = shrink(overhang_to_cover, shell_inner_edge, jtRound, 0.);
+            append(filled_area, diff(overhang_to_cover, shell_inner_boundary));
+        }
+        append_shell_perimeters(overhang_region, overhang_to_cover, additional_shell_count, base_spacing, overhang_flow, scaled_resolution);
         if (overhang_region.empty())
             wave_paths.pop_back();
     }
