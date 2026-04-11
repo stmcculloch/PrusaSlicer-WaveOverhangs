@@ -96,6 +96,36 @@ void tag_wave_overhang_paths(std::vector<ExtrusionPaths> &wave_paths)
             path.attributes_mutable().wave_overhang = true;
 }
 
+void append_shell_perimeters(ExtrusionPaths &overhang_region,
+                             Polygons       &filled_area,
+                             const Polygons &overhang_to_cover,
+                             int             outer_perimeter_count,
+                             coord_t         perimeter_spacing,
+                             const Flow     &perimeter_flow,
+                             double          scaled_resolution)
+{
+    if (outer_perimeter_count <= 0)
+        return;
+
+    Polygons shell_centerline = shrink(overhang_to_cover, std::max<coord_t>(1, perimeter_flow.scaled_width() / 2), jtRound, 0.);
+    for (int i = 0; i < outer_perimeter_count && ! shell_centerline.empty(); ++i) {
+        Polylines shell_loops = to_polylines(shell_centerline);
+        for (Polyline &loop : shell_loops)
+            loop.simplify(std::min(0.05 * perimeter_spacing, scaled_resolution));
+        shell_loops.erase(
+            std::remove_if(shell_loops.begin(), shell_loops.end(), [](const Polyline &loop) { return loop.points.size() < 2; }),
+            shell_loops.end());
+        shell_loops = reconnect_polylines(shell_loops, perimeter_spacing);
+
+        if (! shell_loops.empty()) {
+            extrusion_paths_append(overhang_region, shell_loops, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, perimeter_flow });
+            append(filled_area, intersection(offset(shell_loops, float(0.5 * perimeter_flow.scaled_width()), jtRound, 0., ClipperLib::etOpenRound), overhang_to_cover));
+        }
+
+        shell_centerline = shrink(shell_centerline, perimeter_spacing, jtRound, 0.);
+    }
+}
+
 } // namespace
 
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
@@ -108,14 +138,13 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Flow     &overhang_flow,
     double          scaled_resolution)
 {
-    (void) outer_perimeter_count;
-
     const coord_t base_spacing       = overhang_flow.scaled_spacing();
     const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
     const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
-    const coord_t trim_inset         = std::max<coord_t>(1, wave_flow.scaled_width() / 2);
+    const coord_t shell_inner_edge   = outer_perimeter_count > 0 ? overhang_flow.scaled_width() + (outer_perimeter_count - 1) * base_spacing : 0;
+    const coord_t trim_inset         = std::max<coord_t>(std::max<coord_t>(1, wave_flow.scaled_width() / 2), shell_inner_edge + wave_flow.scaled_width() / 2);
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -187,6 +216,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         overhang_region.erase(
             std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
             overhang_region.end());
+        append_shell_perimeters(overhang_region, filled_area, overhang_to_cover, outer_perimeter_count, base_spacing, overhang_flow, scaled_resolution);
         if (overhang_region.empty())
             wave_paths.pop_back();
     }
