@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <unordered_map>
 #include <utility>
 
@@ -13,6 +14,7 @@
 #include "BoundingBox.hpp"
 #include "ClipperUtils.hpp"
 #include "ExtrusionEntity.hpp"
+#include "ExPolygon.hpp"
 #include "Polyline.hpp"
 #include "libslic3r.h"
 
@@ -122,6 +124,33 @@ void append_shell_perimeters(ExtrusionPaths &overhang_region,
     }
 }
 
+void append_adaptive_fronts(ExtrusionPaths &overhang_region,
+                            const Polygons &remaining_area,
+                            const Flow     &wave_flow)
+{
+    if (remaining_area.empty())
+        return;
+
+    for (const ExPolygon &remaining : union_ex(to_expolygons(remaining_area))) {
+        ThickPolylines thick_fronts;
+        remaining.medial_axis(0., wave_flow.scaled_width(), &thick_fronts);
+
+        for (const ThickPolyline &front : thick_fronts) {
+            if (! front.is_valid())
+                continue;
+
+            const double width_sum = std::accumulate(front.width.begin(), front.width.end(), 0.0);
+            const coord_t average_width = std::max<coord_t>(
+                1,
+                coord_t(std::lround(width_sum / std::max<size_t>(size_t(1), front.width.size()))));
+
+            ExtrusionAttributes attributes{ ExtrusionRole::OverhangPerimeter,
+                                            wave_flow.with_width(unscale<float>(average_width)) };
+            overhang_region.emplace_back(Polyline(front.points), attributes);
+        }
+    }
+}
+
 } // namespace
 
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
@@ -188,6 +217,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 continue;
 
             double accumulated_area = area(accumulated_region);
+            const double wave_cover_area_value = area(wave_cover_polygons);
 
             for (;;) {
                 Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
@@ -197,6 +227,14 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 double next_area = area(next_region);
                 if (next_area <= accumulated_area + min_area_growth)
                     break;
+
+                const bool is_terminal_step = next_area >= wave_cover_area_value - min_area_growth;
+                if (is_terminal_step) {
+                    append_adaptive_fronts(overhang_region, diff(wave_cover_polygons, accumulated_region), wave_flow);
+                    accumulated_region = std::move(next_region);
+                    accumulated_area   = next_area;
+                    break;
+                }
 
                 Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
                 for (Polyline &front : fronts)
