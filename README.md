@@ -7,11 +7,17 @@ Wave overhangs algorithm developed and tested by Janis A. Andersons, Solemé San
 
 ## Wave overhangs
 
-Wave overhangs is an experimental perimeter-stage feature for unsupported overhang regions. Instead of using the legacy extra-overhang perimeter fill, it generates custom wave-style overhang toolpaths over the same detected unsupported area. The feature runs inside perimeter generation, reports the area it filled back to the slicer, and preserves normal overhang-perimeter semantics for preview and G-code classification.
-
-![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
+Wave overhangs is a 3D printing slicing algorithm that lets you print 90 degree overhangs without support material. Toolpaths are generated recursively based on wave propagation theory. The waves continue until they fill the available space, diffracting around corners and even around holes.
 
 ![Wave overhang printed sample](docs/images/wave-overhang-printed-sample.png)
+
+![Wave overhang around holes 1](docs/images/wave-overhang-hole-1.png)
+
+![Wave overhang around holes 2](docs/images/wave-overhang-hole-2.png)
+
+Wave overhangs significantly improve upon the Arc Overhang algorithm by creating smoother surfaces and more streamlined toolpaths, as shown below.
+
+![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
 
 Available settings:
 
@@ -23,7 +29,9 @@ Available settings:
 * `Wave overhang travel speed`: Travel speed used for moves between wave-overhang lines.
 * `Wave overhang fan speed`: Fan speed enforced while printing wave-overhang paths.
 
-The current implementation keeps the support/anchor detection tied to the normal overhang flow, while line spacing and line width control the wave toolpaths themselves.
+Wave overhangs is available through the print settings shown above and is intended for unsupported overhang regions where you want to reduce or avoid support material.
+
+---
 
 You may want to check the [PrusaSlicer project page](https://www.prusa3d.com/prusaslicer/).
 Prebuilt Windows, OSX and Linux binaries are available through the [git releases page](https://github.com/prusa3d/PrusaSlicer/releases) or from the [Prusa3D downloads page](https://www.prusa3d.com/drivers/). There are also [3rd party Linux builds available](https://github.com/prusa3d/PrusaSlicer/wiki/PrusaSlicer-on-Linux---binary-distributions).
