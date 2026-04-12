@@ -168,8 +168,10 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
             Polygons wave_cover_polygons = to_polygons(wave_cover);
-            Polygons anchoring = intersection(expand(wave_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
-            Polylines seeds    = generate_wave_overhang_seeds(wave_cover, anchoring, seed_expansion);
+            const Polygons &seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : wave_cover_polygons;
+            const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : wave_cover;
+            Polygons anchoring = intersection(expand(seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
+            Polylines seeds    = generate_wave_overhang_seeds(seed_boundary, anchoring, seed_expansion);
             if (seeds.empty())
                 continue;
 
@@ -179,7 +181,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             if (trim_boundary.empty())
                 trim_boundary = wave_cover_polygons;
 
-            Polygons accumulated_region = intersection(offset(seeds, float(seed_expansion), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
+            const coord_t seed_offset = additional_shell_count > 0 ? shell_inner_edge + seed_expansion : seed_expansion;
+            Polygons accumulated_region = intersection(offset(seeds, float(seed_offset), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
             if (accumulated_region.empty())
                 continue;
 
@@ -213,9 +216,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         overhang_region.erase(
             std::remove_if(overhang_region.begin(), overhang_region.end(), [](const ExtrusionPath &path) { return path.empty(); }),
             overhang_region.end());
+        append_shell_perimeters(overhang_region, overhang_to_cover, additional_shell_count, base_spacing, overhang_flow, scaled_resolution);
         if (! overhang_region.empty())
             append(filled_area, additional_shell_count > 0 ? overhang_to_cover : wave_cover_area);
-        append_shell_perimeters(overhang_region, overhang_to_cover, additional_shell_count, base_spacing, overhang_flow, scaled_resolution);
         if (overhang_region.empty())
             wave_paths.pop_back();
     }
