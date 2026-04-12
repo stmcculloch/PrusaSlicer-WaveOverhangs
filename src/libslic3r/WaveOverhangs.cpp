@@ -143,9 +143,18 @@ void append_adaptive_fronts(ExtrusionPaths &overhang_region,
             const coord_t average_width = std::max<coord_t>(
                 1,
                 coord_t(std::lround(width_sum / std::max<size_t>(size_t(1), front.width.size()))));
+            const float raw_adaptive_width = unscale<float>(average_width);
+            const float min_terminal_width = wave_flow.width() / 3.f;
+            if (raw_adaptive_width < min_terminal_width)
+                continue;
+
+            const float min_valid_width = std::max(
+                unscale<float>(coord_t(1)),
+                wave_flow.height() * float(1. - 0.25 * PI) + 1e-4f);
+            const float adaptive_width = std::max(min_valid_width, raw_adaptive_width);
 
             ExtrusionAttributes attributes{ ExtrusionRole::OverhangPerimeter,
-                                            wave_flow.with_width(unscale<float>(average_width)) };
+                                            wave_flow.with_width(adaptive_width) };
             overhang_region.emplace_back(Polyline(front.points), attributes);
         }
     }
