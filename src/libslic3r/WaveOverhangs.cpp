@@ -141,6 +141,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
     const coord_t trim_inset         = std::max<coord_t>(std::max<coord_t>(1, wave_flow.scaled_width() / 2), shell_inner_edge + wave_flow.scaled_width() / 2);
+    const coord_t filled_area_regularization = std::max<coord_t>(1, base_spacing / 2);
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -224,7 +225,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     }
 
     tag_wave_overhang_paths(wave_paths);
-    return { wave_paths, union_safety_offset(filled_area) };
+    return { wave_paths, union_safety_offset(closing_ex(filled_area, float(filled_area_regularization), jtRound, 0.)) };
 }
 
 } // namespace Slic3r::WaveOverhangs
