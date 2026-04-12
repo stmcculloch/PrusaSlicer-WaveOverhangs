@@ -1,11 +1,17 @@
 
 ![PrusaSlicer logo](/resources/icons/PrusaSlicer.png?raw=true)
 
-# PrusaSlicer
+# PrusaSlicer - Wave Overhangs Demo
+
+Wave overhangs algorithm developed and tested by Janis A. Andersons, Solemé Sanchez, and Tom Vaneker. Improves upon the [Arc Overhang](https://github.com/stmcculloch/arc-overhang) algorithm by Steven McCulloch.
 
 ## Wave overhangs
 
 Wave overhangs is an experimental perimeter-stage feature for unsupported overhang regions. Instead of using the legacy extra-overhang perimeter fill, it generates custom wave-style overhang toolpaths over the same detected unsupported area. The feature runs inside perimeter generation, reports the area it filled back to the slicer, and preserves normal overhang-perimeter semantics for preview and G-code classification.
+
+![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
+
+![Wave overhang printed sample](docs/images/wave-overhang-printed-sample.png)
 
 Available settings:
 
