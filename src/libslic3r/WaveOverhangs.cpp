@@ -239,7 +239,11 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
                 const bool is_terminal_step = next_area >= wave_cover_area_value - min_area_growth;
                 if (is_terminal_step) {
-                    append_adaptive_fronts(overhang_region, diff(wave_cover_polygons, accumulated_region), wave_flow);
+                    Polygons printed_extent = intersection(
+                        offset(accumulated_region, 0.5f * float(wave_flow.scaled_width()), jtRound, 0.),
+                        wave_cover_polygons);
+                    Polygons remaining_strip = diff(wave_cover_polygons, printed_extent);
+                    append_adaptive_fronts(overhang_region, remaining_strip, wave_flow);
                     accumulated_region = std::move(next_region);
                     accumulated_area   = next_area;
                     break;
