@@ -9,15 +9,16 @@ Wave overhangs algorithm developed and tested by Janis A. Andersons, Solemé San
 
 Wave overhangs is a 3D printing slicing algorithm that lets you print 90 degree overhangs without support material. Toolpaths are generated recursively based on wave propagation theory. The waves continue until they fill the available space, diffracting around corners and even around holes.
 
-![Wave overhang printed sample](docs/images/wave-overhang-printed-sample.png)
+![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
 
-![Wave overhang around holes 1](docs/images/wave-overhang-hole-1.png)
-
-![Wave overhang around holes 2](docs/images/wave-overhang-hole-2.png)
+<p>
+  <img src="docs/images/wave-overhang-hole-1.png" alt="Wave overhang around holes 1" width="49%" />
+  <img src="docs/images/wave-overhang-hole-2.png" alt="Wave overhang around holes 2" width="49%" />
+</p>
 
 Wave overhangs significantly improve upon the Arc Overhang algorithm by creating smoother surfaces and more streamlined toolpaths, as shown below.
 
-![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
+![Wave overhang printed sample](docs/images/wave-overhang-printed-sample.png)
 
 Available settings:
 
