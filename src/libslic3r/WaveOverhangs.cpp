@@ -183,11 +183,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             if (accumulated_region.empty())
                 continue;
 
-            double       accumulated_area = area(accumulated_region);
-            const size_t max_iterations   = std::max<size_t>(
-                3, size_t(std::ceil(get_extents(wave_cover_polygons).radius() / std::max(1.0, double(wave_spacing)))) + 2);
+            double accumulated_area = area(accumulated_region);
 
-            for (size_t iteration = 0; iteration < max_iterations; ++iteration) {
+            for (;;) {
                 Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
                 if (next_region.empty())
                     break;
