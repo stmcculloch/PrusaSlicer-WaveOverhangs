@@ -990,6 +990,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_extra_perimeters_over
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(ExPolygons               infill_area,
                                                                               const Polygons          &lower_slices_polygons,
                                                                               int                      perimeter_count,
+                                                                              int                      desired_wave_perimeters,
                                                                               const Flow              &overhang_flow,
                                                                               double                   scaled_resolution,
                                                                               const PrintRegionConfig &region_config,
@@ -998,7 +999,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(Ex
                                                                               bool                     use_wave_overhangs)
 {
     if (use_wave_overhangs) {
-        const int additional_shell_count = std::max(0, region_config.wave_overhang_outer_perimeters.value - perimeter_count);
+        const int additional_shell_count = std::max(0, desired_wave_perimeters - perimeter_count);
         return WaveOverhangs::generate(
             infill_area, lower_slices_polygons, perimeter_count,
             additional_shell_count,
@@ -1284,7 +1285,9 @@ void PerimeterGenerator::process_arachne(
     if (lower_slices != nullptr && params.config.overhangs &&
         (params.config.extra_perimeters_on_overhangs || params.config.wave_overhangs) &&
         params.config.perimeters > 0 && params.layer_id > params.object_config.raft_layers) {
-        const int desired_wave_perimeters = params.config.wave_overhangs ? params.config.wave_overhang_outer_perimeters.value : loop_number + 1;
+        const int desired_wave_perimeters = params.config.wave_overhangs ?
+            std::min(params.config.wave_overhang_outer_perimeters.value, loop_number + 1) :
+            loop_number + 1;
         ExPolygons wave_infill_areas = params.config.wave_overhangs ?
             expand_wave_target_area(infill_areas, loop_number + 1, desired_wave_perimeters, perimeter_spacing) :
             infill_areas;
@@ -1293,6 +1296,7 @@ void PerimeterGenerator::process_arachne(
         auto [extra_perimeters, filled_area] = generate_overhang_toolpaths(wave_infill_areas,
                                                                            lower_slices_polygons_cache,
                                                                            loop_number + 1,
+                                                                           desired_wave_perimeters,
                                                                            params.overhang_flow, params.scaled_resolution,
                                                                            params.config,
                                                                            params.object_config, params.print_config,
@@ -1662,7 +1666,9 @@ void PerimeterGenerator::process_classic(
     if (lower_slices != nullptr && params.config.overhangs &&
         (params.config.extra_perimeters_on_overhangs || params.config.wave_overhangs) &&
         params.config.perimeters > 0 && params.layer_id > params.object_config.raft_layers) {
-        const int desired_wave_perimeters = params.config.wave_overhangs ? params.config.wave_overhang_outer_perimeters.value : loop_number + 1;
+        const int desired_wave_perimeters = params.config.wave_overhangs ?
+            std::min(params.config.wave_overhang_outer_perimeters.value, loop_number + 1) :
+            loop_number + 1;
         ExPolygons wave_infill_areas = params.config.wave_overhangs ?
             expand_wave_target_area(infill_areas, loop_number + 1, desired_wave_perimeters, perimeter_spacing) :
             infill_areas;
@@ -1671,6 +1677,7 @@ void PerimeterGenerator::process_classic(
         auto [extra_perimeters, filled_area] = generate_overhang_toolpaths(wave_infill_areas,
                                                                            lower_slices_polygons_cache,
                                                                            loop_number + 1,
+                                                                           desired_wave_perimeters,
                                                                            params.overhang_flow, params.scaled_resolution,
                                                                            params.config,
                                                                            params.object_config, params.print_config,

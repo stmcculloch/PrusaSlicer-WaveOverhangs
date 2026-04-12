@@ -1155,7 +1155,7 @@ void PrintConfigDef::init_fff_params()
     def = this->add("wave_overhang_outer_perimeters", coInt);
     def->label = L("Outer perimeters during wave overhangs");
     def->category = L("Layers and Perimeters");
-    def->tooltip = L("Number of regular outer perimeter passes to keep at the end of wave-overhang regions.");
+    def->tooltip = L("Total number of perimeter passes to keep over wave-overhang regions. Values above the local perimeter count for a region are capped to that region's actual perimeter count.");
     def->min = 1;
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionInt(1));

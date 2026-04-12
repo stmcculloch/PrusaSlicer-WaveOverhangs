@@ -133,6 +133,21 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
 
     double fill_density = config->option<ConfigOptionPercent>("fill_density")->value;
 
+    if (config->opt_bool("wave_overhangs") &&
+        config->opt_int("wave_overhang_outer_perimeters") > config->opt_int("perimeters"))
+    {
+        wxString msg_text = _(L("Wave overhang outer perimeters cannot be greater than the normal perimeter count.\n\n"
+                                "The wave overhang perimeter count will be reduced to match the Perimeters setting."));
+
+        MessageDialog dialog(m_msg_dlg_parent, msg_text, _(L("Wave overhangs")), wxICON_WARNING | wxOK);
+        DynamicPrintConfig new_conf = *config;
+        is_msg_dlg_already_exist = true;
+        dialog.ShowModal();
+        new_conf.set_key_value("wave_overhang_outer_perimeters", new ConfigOptionInt(config->opt_int("perimeters")));
+        apply(config, &new_conf);
+        is_msg_dlg_already_exist = false;
+    }
+
     if (config->opt_bool("spiral_vase") &&
         ! (config->opt_int("perimeters") == 1 &&
            config->opt_int("top_solid_layers") == 0 &&
