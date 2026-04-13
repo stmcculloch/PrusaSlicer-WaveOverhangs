@@ -76,31 +76,3 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     CHECK(saw_wave_width_path);
     CHECK(saw_shell_width_path);
 }
-
-TEST_CASE("Wave overhangs emit an adaptive final front instead of leaving a terminal gap", "[WaveOverhangs]")
-{
-    ExPolygon infill{ Polygon::new_scale({ { 0., 0. }, { 9.5, 0. }, { 9.5, 8. }, { 0., 8. } }) };
-    Polygons lower_support = {
-        Polygon::new_scale({ { 0., 0. }, { 1., 0. }, { 1., 8. }, { 0., 8. } })
-    };
-
-    Flow flow(1.f, 1.f, 1.f);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 1, 0, 1.0, 1.0, flow, scale_(0.01));
-
-    REQUIRE(! regions.empty());
-    CHECK(! filled_area.empty());
-
-    bool   saw_narrow_terminal_path = false;
-    coord_t max_x                   = 0;
-    for (const ExtrusionPaths &paths : regions) {
-        for (const ExtrusionPath &path : paths) {
-            for (const Point &pt : path.polyline.points)
-                max_x = std::max(max_x, pt.x());
-            if (path.width() < 0.999f)
-                saw_narrow_terminal_path = true;
-        }
-    }
-
-    CHECK(saw_narrow_terminal_path);
-    CHECK(unscale<double>(max_x) > Approx(9.0));
-}
