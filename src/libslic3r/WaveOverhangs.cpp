@@ -433,7 +433,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 Polylines level_fronts;
 
                 for (const Polygon &active_component : active_components) {
-                    Polygons next_region = intersection(offset(Polygons{ active_component }, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
+                    Polygons current_component{ active_component };
+                    Polygons next_region = intersection(offset(current_component, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
                     if (next_region.empty())
                         continue;
 
@@ -441,7 +442,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                         continue;
 
                     for (Polygon &next_component : next_region) {
-                        Polylines fronts = intersection_pl(to_polylines(Polygons{ next_component }), trim_boundary);
+                        Polygons component_region{ next_component };
+                        Polylines fronts = intersection_pl(to_polylines(component_region), trim_boundary);
                         for (Polyline &front : fronts)
                             front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
                         fronts.erase(
@@ -470,7 +472,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     break;
 
                 front_levels.emplace_back(std::move(level_fronts));
-                active_components = next_active_components.size() > 1 ? union_(next_active_components) : std::move(next_active_components);
+                active_components = std::move(next_active_components);
             }
 
             if (! front_levels.empty()) {
