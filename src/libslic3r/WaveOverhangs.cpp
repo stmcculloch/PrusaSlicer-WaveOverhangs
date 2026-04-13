@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <iterator>
 #include <unordered_map>
 #include <utility>
 
@@ -422,71 +423,54 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 trim_boundary = wave_cover_polygons;
 
             const coord_t seed_offset = additional_shell_count > 0 ? shell_inner_edge + seed_expansion : seed_expansion;
-            Polygons accumulated_region = intersection(offset(seeds, float(seed_offset), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
-            if (accumulated_region.empty())
+            Polygons active_components = intersection(offset(seeds, float(seed_offset), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
+            if (active_components.empty())
                 continue;
 
             std::vector<Polylines> front_levels;
-            double accumulated_area = area(accumulated_region);
             for (;;) {
-                Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
-                if (next_region.empty())
-                    break;
+                Polygons  next_active_components;
+                Polylines level_fronts;
 
-                Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
-                for (Polyline &front : fronts)
-                    front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
-                fronts.erase(
-                    std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
-                    fronts.end());
-                fronts = reconnect_polylines(fronts, wave_spacing);
-
-                Polylines rejected_fronts;
-                rejected_fronts.reserve(fronts.size());
-                fronts.erase(
-                    std::remove_if(fronts.begin(), fronts.end(), [&rejected_fronts, min_front_length](const Polyline &front) {
-                        if (front.length() < min_front_length) {
-                            rejected_fronts.push_back(front);
-                            return true;
-                        }
-                        return false;
-                    }),
-                    fronts.end());
-                if (fronts.empty())
-                    break;
-
-                if (! rejected_fronts.empty()) {
-                    Polygons blocked_region = offset(rejected_fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound);
-                    Polygons filtered_region = diff(next_region, blocked_region);
-                    if (filtered_region.empty())
-                        break;
-
-                    Polygons reachable_region;
-                    reachable_region.reserve(filtered_region.size());
-                    for (const Polygon &component : filtered_region) {
-                        BoundingBox component_bb(component.points);
-                        component_bb.offset(SCALED_EPSILON);
-                        Polygons accumulated_region_clipped =
-                            ClipperUtils::clip_clipper_polygons_with_subject_bbox(accumulated_region, component_bb);
-                        if (! accumulated_region_clipped.empty() &&
-                            ! intersection(Polygons{ component }, accumulated_region_clipped).empty()) {
-                            reachable_region.push_back(component);
-                        }
-                    }
-
-                    next_region = std::move(reachable_region);
+                for (const Polygon &active_component : active_components) {
+                    Polygons next_region = intersection(offset(Polygons{ active_component }, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
                     if (next_region.empty())
-                        break;
+                        continue;
+
+                    if (std::abs(area(next_region)) <= std::abs(area(active_component)) + min_area_growth)
+                        continue;
+
+                    for (Polygon &next_component : next_region) {
+                        Polylines fronts = intersection_pl(to_polylines(Polygons{ next_component }), trim_boundary);
+                        for (Polyline &front : fronts)
+                            front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
+                        fronts.erase(
+                            std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
+                            fronts.end());
+                        fronts = reconnect_polylines(fronts, wave_spacing);
+
+                        fronts.erase(
+                            std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
+                                return front.length() < min_front_length;
+                            }),
+                            fronts.end());
+                        if (fronts.empty())
+                            continue;
+
+                        level_fronts.insert(level_fronts.end(),
+                                            std::make_move_iterator(fronts.begin()),
+                                            std::make_move_iterator(fronts.end()));
+                        next_active_components.push_back(std::move(next_component));
+                    }
                 }
 
-                double next_area = area(next_region);
-                if (next_area <= accumulated_area + min_area_growth)
+                if (next_active_components.empty())
+                    break;
+                if (level_fronts.empty())
                     break;
 
-                front_levels.emplace_back(fronts);
-
-                accumulated_region = std::move(next_region);
-                accumulated_area   = next_area;
+                front_levels.emplace_back(std::move(level_fronts));
+                active_components = next_active_components.size() > 1 ? union_(next_active_components) : std::move(next_active_components);
             }
 
             if (! front_levels.empty()) {
