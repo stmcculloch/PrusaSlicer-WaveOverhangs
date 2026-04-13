@@ -101,6 +101,7 @@ TEST_CASE("Get keys", "[Config]"){
 TEST_CASE("Wave overhangs config plumbing", "[Config]") {
     DynamicPrintConfig defaults = DynamicPrintConfig::full_print_config();
     CHECK(defaults.opt_float("wave_overhang_perimeter_overlap") == Approx(0.1));
+    CHECK(defaults.opt_float("wave_overhang_narrow_split_threshold") == Approx(2.0));
     CHECK(defaults.opt_enum<WaveOverhangPattern>("wave_overhang_pattern") == WaveOverhangPattern::Smart);
     CHECK(defaults.opt_float("wave_overhang_line_spacing") == Approx(0.35));
     CHECK(defaults.opt_float("wave_overhang_line_width") == Approx(0.4));
@@ -109,6 +110,7 @@ TEST_CASE("Wave overhangs config plumbing", "[Config]") {
         { "wave_overhangs", 1 },
         { "wave_overhang_outer_perimeters", 2 },
         { "wave_overhang_perimeter_overlap", 0.06 },
+        { "wave_overhang_narrow_split_threshold", 1.75 },
         { "wave_overhang_pattern", "monotonic" },
         { "wave_overhang_line_spacing", 0.32 },
         { "wave_overhang_line_width", 0.38 },
@@ -120,6 +122,7 @@ TEST_CASE("Wave overhangs config plumbing", "[Config]") {
     CHECK(config.opt_serialize("wave_overhangs") == "1");
     CHECK(config.opt_int("wave_overhang_outer_perimeters") == 2);
     CHECK(config.opt_float("wave_overhang_perimeter_overlap") == Approx(0.06));
+    CHECK(config.opt_float("wave_overhang_narrow_split_threshold") == Approx(1.75));
     CHECK(config.opt_enum<WaveOverhangPattern>("wave_overhang_pattern") == WaveOverhangPattern::Monotonic);
     CHECK(config.opt_float("wave_overhang_line_spacing") == Approx(0.32));
     CHECK(config.opt_float("wave_overhang_line_width") == Approx(0.38));
@@ -132,6 +135,7 @@ TEST_CASE("Wave overhangs config plumbing", "[Config]") {
     CHECK(applied.wave_overhangs.value);
     CHECK(applied.wave_overhang_outer_perimeters.value == 2);
     CHECK(applied.wave_overhang_perimeter_overlap.value == Approx(0.06));
+    CHECK(applied.wave_overhang_narrow_split_threshold.value == Approx(1.75));
     CHECK(applied.wave_overhang_pattern.value == WaveOverhangPattern::Monotonic);
     CHECK(applied.wave_overhang_line_spacing.value == Approx(0.32));
     CHECK(applied.wave_overhang_line_width.value == Approx(0.38));

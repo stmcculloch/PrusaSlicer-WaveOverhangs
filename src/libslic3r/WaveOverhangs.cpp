@@ -149,13 +149,17 @@ Polygon make_split_slit(const Point &a, const Point &b, coord_t extension, coord
     return slit;
 }
 
-Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing)
+Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold)
 {
     const ExPolygons inset_components = offset_ex(wave_cover, -float(wave_spacing), jtRound, 0.);
     if (inset_components.size() <= 1)
         return {};
 
-    const double max_gap_sq = std::pow(2.0 * double(wave_spacing), 2);
+    const double threshold = std::max(0.0, narrow_split_threshold);
+    if (threshold <= 0.)
+        return {};
+
+    const double max_gap_sq = std::pow(threshold * double(wave_spacing), 2);
     const coord_t slit_half_width = std::max<coord_t>(1, wave_spacing / 20);
     const coord_t slit_extension  = std::max<coord_t>(slit_half_width, wave_spacing / 5);
 
@@ -463,6 +467,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     int             perimeter_count,
     int             additional_shell_count,
     double          wave_perimeter_overlap,
+    double          wave_narrow_split_threshold,
     WaveOverhangPattern wave_pattern,
     double          wave_line_spacing,
     double          wave_line_width,
@@ -507,7 +512,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
             ExPolygons split_wave_covers = { wave_cover };
-            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing); ! split_slits.empty())
+            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold); ! split_slits.empty())
                 split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
 
             for (const ExPolygon &split_wave_cover : split_wave_covers) {

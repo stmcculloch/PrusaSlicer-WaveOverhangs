@@ -1469,6 +1469,7 @@ void TabPrint::build()
         optgroup->append_single_option_line("wave_overhangs", category_path + "use-wave-overhangs");
         optgroup->append_single_option_line("wave_overhang_outer_perimeters");
         optgroup->append_single_option_line("wave_overhang_perimeter_overlap");
+        optgroup->append_single_option_line("wave_overhang_narrow_split_threshold");
         optgroup->append_single_option_line("wave_overhang_pattern");
         optgroup->append_single_option_line("ensure_vertical_shell_thickness", category_path + "ensure-vertical-shell-thickness");
         optgroup->append_single_option_line("avoid_crossing_curled_overhangs", category_path + "avoid-crossing-curled-overhangs");
