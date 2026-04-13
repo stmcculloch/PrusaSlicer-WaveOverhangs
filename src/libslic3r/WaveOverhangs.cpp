@@ -735,9 +735,11 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             for (const ExPolygon &split_wave_cover : split_wave_covers) {
                 Polygons wave_cover_polygons = to_polygons(split_wave_cover);
                 const Polygons &seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : wave_cover_polygons;
-                const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : split_wave_cover;
+                const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : wave_cover;
                 Polygons anchoring = intersection(expand(seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
                 Polylines seeds    = generate_wave_overhang_seeds(seed_boundary, anchoring, seed_expansion);
+                if (! seeds.empty())
+                    seeds = intersection_pl(seeds, wave_cover_polygons);
                 if (seeds.empty())
                     continue;
 
@@ -779,14 +781,16 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 }
 
                 if (! front_levels.empty()) {
+                    ExtrusionPaths split_region_paths;
                     if (wave_pattern == WaveOverhangPattern::ZigZag) {
-                        append_zig_zag_front_levels(overhang_region, front_levels, wave_flow, zig_zag_connector_limit);
+                        append_zig_zag_front_levels(split_region_paths, front_levels, wave_flow, zig_zag_connector_limit);
                     } else {
                         Polylines collected_fronts;
                         for (const Polylines &level : front_levels)
                             collected_fronts.insert(collected_fronts.end(), level.begin(), level.end());
-                        append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
+                        append_wave_fronts(split_region_paths, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
                     }
+                    append(overhang_region, split_region_paths);
                 }
             }
         }
