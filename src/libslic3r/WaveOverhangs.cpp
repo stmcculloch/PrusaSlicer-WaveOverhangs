@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <unordered_map>
@@ -18,6 +19,8 @@
 #include "ExtrusionEntity.hpp"
 #include "Line.hpp"
 #include "Polyline.hpp"
+#include "SVG.hpp"
+#include "Utils.hpp"
 #include "libslic3r.h"
 
 namespace Slic3r::WaveOverhangs {
@@ -101,6 +104,87 @@ struct NarrowSplitCandidate {
     Polygon slit;
 };
 
+struct NarrowSplitDebugLevel {
+    coord_t                         inset_depth{ 0 };
+    ExPolygons                      inset_components;
+    std::vector<ClosestBoundaryPair> closest_pairs;
+    Polygons                        candidate_slits;
+};
+
+struct NarrowSplitDebugInfo {
+    ExPolygon                       wave_cover;
+    coord_t                         wave_spacing{ 0 };
+    double                          threshold{ 0. };
+    std::vector<NarrowSplitDebugLevel> levels;
+    Polygons                        final_slits;
+    ExPolygons                      split_wave_covers;
+};
+
+bool wave_split_debug_enabled()
+{
+    static const bool enabled = std::getenv("SLIC3R_WAVE_SPLIT_DEBUG") != nullptr;
+    return enabled;
+}
+
+void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
+{
+    static int iRun = 0;
+
+    BoundingBox bbox = get_extents(ExPolygons{ debug_info.wave_cover });
+    bbox.offset(scale_(1.));
+
+    {
+        SVG svg(debug_out_path("wave-overhang-split-%03d-before.svg", iRun).c_str(), bbox);
+        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.45f);
+        svg.draw_outline(debug_info.wave_cover, "black", "#444444", scale_(0.03));
+        for (const NarrowSplitDebugLevel &level : debug_info.levels) {
+            svg.draw(level.inset_components, "#9fd3ff", 0.12f);
+            svg.draw_outline(level.inset_components, "#2c7fb8", "#2c7fb8", scale_(0.025));
+            for (const ClosestBoundaryPair &pair : level.closest_pairs) {
+                if (pair.valid)
+                    svg.draw(Line(pair.a, pair.b), "#ff9500", scale_(0.06));
+            }
+            svg.draw(level.candidate_slits, "#ff5a5f");
+            svg.draw_outline(level.candidate_slits, "#c62828", scale_(0.02));
+        }
+        svg.draw_text(bbox.min + Point(scale_(0.5), scale_(0.5)), string_printf("spacing=%.3f threshold=%.2f", unscale<double>(debug_info.wave_spacing), debug_info.threshold).c_str(), "black", 14.f);
+        svg.Close();
+    }
+
+    {
+        SVG svg(debug_out_path("wave-overhang-split-%03d-after.svg", iRun).c_str(), bbox);
+        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.20f);
+        svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
+        svg.draw(debug_info.final_slits, "#ff5a5f");
+        svg.draw_outline(debug_info.final_slits, "#c62828", scale_(0.02));
+        svg.draw(debug_info.split_wave_covers, "#a7f3d0", 0.45f);
+        svg.draw_outline(debug_info.split_wave_covers, "#047857", "#047857", scale_(0.03));
+        svg.Close();
+    }
+
+    for (size_t level_idx = 0; level_idx < debug_info.levels.size(); ++level_idx) {
+        const NarrowSplitDebugLevel &level = debug_info.levels[level_idx];
+        SVG svg(debug_out_path("wave-overhang-split-%03d-inset-%02d.svg", iRun, int(level_idx)).c_str(), bbox);
+        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.18f);
+        svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
+        svg.draw(level.inset_components, "#9fd3ff", 0.22f);
+        svg.draw_outline(level.inset_components, "#2c7fb8", "#2c7fb8", scale_(0.03));
+        for (const ClosestBoundaryPair &pair : level.closest_pairs) {
+            if (pair.valid) {
+                svg.draw(Line(pair.a, pair.b), "#ff9500", scale_(0.07));
+                svg.draw(pair.a, "#ef4444", scale_(0.08));
+                svg.draw(pair.b, "#ef4444", scale_(0.08));
+            }
+        }
+        svg.draw(level.candidate_slits, "#ff5a5f");
+        svg.draw_outline(level.candidate_slits, "#c62828", scale_(0.02));
+        svg.draw_text(bbox.min + Point(scale_(0.5), scale_(0.5)), string_printf("inset=%.3f", unscale<double>(level.inset_depth)).c_str(), "black", 14.f);
+        svg.Close();
+    }
+
+    ++iRun;
+}
+
 ClosestBoundaryPair find_closest_boundary_pair(const ExPolygon &a, const ExPolygon &b, const ExPolygon &container)
 {
     ClosestBoundaryPair best;
@@ -157,7 +241,7 @@ Polygon make_split_slit(const Point &a, const Point &b, coord_t extension, coord
     return slit;
 }
 
-Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold)
+Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold, NarrowSplitDebugInfo *debug_info = nullptr)
 {
     const double threshold = std::max(0.0, narrow_split_threshold);
     if (threshold <= 0.)
@@ -173,12 +257,21 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
     for (double inset_fraction : inset_fractions) {
         const coord_t inset_depth = std::max<coord_t>(1, coord_t(std::round(inset_fraction * double(wave_spacing))));
         const ExPolygons inset_components = offset_ex(wave_cover, -float(inset_depth), jtRound, 0.);
+        NarrowSplitDebugLevel *debug_level = nullptr;
+        if (debug_info != nullptr) {
+            debug_info->levels.emplace_back();
+            debug_level = &debug_info->levels.back();
+            debug_level->inset_depth = inset_depth;
+            debug_level->inset_components = inset_components;
+        }
         if (inset_components.size() <= 1)
             continue;
 
         for (size_t i = 0; i < inset_components.size(); ++i) {
             for (size_t j = i + 1; j < inset_components.size(); ++j) {
                 ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
+                if (debug_level != nullptr && pair.valid)
+                    debug_level->closest_pairs.push_back(pair);
                 if (! pair.valid || pair.distance_sq > max_gap_sq)
                     continue;
 
@@ -188,8 +281,11 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
                 candidate.distance_sq = pair.distance_sq;
                 candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
                 candidate.slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
-                if (candidate.slit.is_valid())
+                if (candidate.slit.is_valid()) {
+                    if (debug_level != nullptr)
+                        debug_level->candidate_slits.push_back(candidate.slit);
                     candidates.push_back(std::move(candidate));
+                }
             }
         }
     }
@@ -219,7 +315,10 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
         slits.push_back(std::move(candidate.slit));
     }
 
-    return slits.empty() ? Polygons{} : union_(slits);
+    Polygons result = slits.empty() ? Polygons{} : union_(slits);
+    if (debug_info != nullptr)
+        debug_info->final_slits = result;
+    return result;
 }
 
 Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons &anchoring, const coord_t seed_expansion)
@@ -555,8 +654,26 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
             ExPolygons split_wave_covers = { wave_cover };
-            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold); ! split_slits.empty())
+            NarrowSplitDebugInfo split_debug;
+            NarrowSplitDebugInfo *split_debug_ptr = nullptr;
+            if (wave_split_debug_enabled()) {
+                split_debug_ptr = &split_debug;
+                split_debug.wave_cover = wave_cover;
+                split_debug.wave_spacing = wave_spacing;
+                split_debug.threshold = wave_narrow_split_threshold;
+            }
+
+            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold, split_debug_ptr); ! split_slits.empty())
                 split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
+            if (split_debug_ptr != nullptr) {
+                split_debug.split_wave_covers = split_wave_covers;
+                const bool had_narrow_signal = std::any_of(
+                    split_debug.levels.begin(),
+                    split_debug.levels.end(),
+                    [](const NarrowSplitDebugLevel &level) { return level.inset_components.size() > 1 || ! level.closest_pairs.empty(); });
+                if (had_narrow_signal || ! split_debug.final_slits.empty())
+                    export_narrow_split_debug_svg(split_debug);
+            }
 
             for (const ExPolygon &split_wave_cover : split_wave_covers) {
                 Polygons wave_cover_polygons = to_polygons(split_wave_cover);
