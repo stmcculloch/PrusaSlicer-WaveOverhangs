@@ -8,6 +8,7 @@
 #include <array>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 
@@ -75,75 +76,103 @@ Polylines reconnect_polylines(const Polylines &polylines, double limit_distance)
     return result;
 }
 
-Point point_at_distance(const Polyline &line, double distance)
+template <class Fn>
+void for_each_boundary_point(const ExPolygon &expoly, Fn &&fn)
 {
-    if (line.points.empty())
-        return Point{};
-    if (distance <= 0. || line.points.size() == 1)
-        return line.first_point();
+    for (const Point &pt : expoly.contour.points)
+        fn(pt);
+    for (const Polygon &hole : expoly.holes)
+        for (const Point &pt : hole.points)
+            fn(pt);
+}
 
-    double walked = 0.;
-    for (size_t i = 1; i < line.points.size(); ++i) {
-        const Vec2d a = line.points[i - 1].cast<double>();
-        const Vec2d b = line.points[i].cast<double>();
-        const Vec2d segment = b - a;
-        const double segment_length = segment.norm();
-        if (segment_length <= 0.)
-            continue;
-        if (walked + segment_length >= distance) {
-            const double t = (distance - walked) / segment_length;
-            return Point((a + t * segment).cast<coord_t>());
+struct ClosestBoundaryPair {
+    Point  a;
+    Point  b;
+    double distance_sq{ std::numeric_limits<double>::infinity() };
+    bool   valid{ false };
+};
+
+ClosestBoundaryPair find_closest_boundary_pair(const ExPolygon &a, const ExPolygon &b, const ExPolygon &container)
+{
+    ClosestBoundaryPair best;
+
+    auto try_pair = [&](const Point &src, const ExPolygon &other, bool src_is_a) {
+        Point projected = other.point_projection(src);
+        const double distance_sq = (projected - src).cast<double>().squaredNorm();
+        if (distance_sq >= best.distance_sq)
+            return;
+
+        const Point midpoint = (0.5 * (src.cast<double>() + projected.cast<double>())).cast<coord_t>();
+        if (! container.contains(midpoint))
+            return;
+
+        best.distance_sq = distance_sq;
+        best.valid = true;
+        if (src_is_a) {
+            best.a = src;
+            best.b = projected;
+        } else {
+            best.a = projected;
+            best.b = src;
         }
-        walked += segment_length;
-    }
-    return line.last_point();
+    };
+
+    for_each_boundary_point(a, [&](const Point &pt) { try_pair(pt, b, true); });
+    for_each_boundary_point(b, [&](const Point &pt) { try_pair(pt, a, false); });
+
+    return best;
 }
 
-double front_lineage_score(const Polyline &candidate, const Polyline &parent, coord_t support_reach)
+Polygon make_split_slit(const Point &a, const Point &b, coord_t extension, coord_t half_width)
 {
-    if (candidate.points.size() < 2 || parent.points.size() < 2)
-        return -1.;
+    const Vec2d start = a.cast<double>();
+    const Vec2d end   = b.cast<double>();
+    const Vec2d delta = end - start;
+    const double length = delta.norm();
+    if (length <= 0.)
+        return {};
 
-    const double candidate_length = candidate.length();
-    if (candidate_length <= 0.)
-        return -1.;
+    const Vec2d dir = delta / length;
+    const Vec2d normal(-dir.y(), dir.x());
+    const Vec2d extended_start = start - dir * double(extension);
+    const Vec2d extended_end   = end + dir * double(extension);
+    const Vec2d offset         = normal * double(std::max<coord_t>(1, half_width));
 
-    const double sample_length = std::min(candidate_length, double(std::max<coord_t>(1, support_reach)));
-    const std::array<std::pair<double, double>, 3> samples = {{
-        { 0.0,                 3.0 },
-        { 0.5 * sample_length, 2.0 },
-        { sample_length,       1.0 }
-    }};
-
-    double score = 0.;
-    for (const auto &[distance_along, weight] : samples) {
-        Point sample = point_at_distance(candidate, distance_along);
-        auto [seg_idx, foot] = foot_pt(parent.points, sample);
-        if (seg_idx < 0 || size_t(seg_idx + 1) >= parent.points.size())
-            continue;
-
-        const Point &a = parent.points[size_t(seg_idx)];
-        const Point &b = parent.points[size_t(seg_idx + 1)];
-        const bool interior_projection = foot != a && foot != b;
-        const double distance_to_parent = (sample - foot).cast<double>().norm();
-        const double normalized_support = std::max(0.0, 1.0 - distance_to_parent / double(std::max<coord_t>(1, support_reach)));
-
-        score += weight * (3.0 * normalized_support + (interior_projection ? 1.5 : 0.2));
-    }
-
-    return score;
+    Polygon slit;
+    slit.points = {
+        Point((extended_start + offset).cast<coord_t>()),
+        Point((extended_end   + offset).cast<coord_t>()),
+        Point((extended_end   - offset).cast<coord_t>()),
+        Point((extended_start - offset).cast<coord_t>())
+    };
+    return slit;
 }
 
-bool front_has_active_parent(const Polyline &candidate, const Polylines &active_fronts, coord_t support_reach)
+Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing)
 {
-    if (active_fronts.empty())
-        return true;
+    const ExPolygons inset_components = offset_ex(wave_cover, -float(wave_spacing), jtRound, 0.);
+    if (inset_components.size() <= 1)
+        return {};
 
-    double best_score = -1.;
-    for (const Polyline &parent : active_fronts)
-        best_score = std::max(best_score, front_lineage_score(candidate, parent, support_reach));
+    const double max_gap_sq = std::pow(2.0 * double(wave_spacing), 2);
+    const coord_t slit_half_width = std::max<coord_t>(1, wave_spacing / 20);
+    const coord_t slit_extension  = std::max<coord_t>(slit_half_width, wave_spacing / 5);
 
-    return best_score >= 6.0;
+    Polygons slits;
+    for (size_t i = 0; i < inset_components.size(); ++i) {
+        for (size_t j = i + 1; j < inset_components.size(); ++j) {
+            ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
+            if (! pair.valid || pair.distance_sq > max_gap_sq)
+                continue;
+
+            Polygon slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
+            if (slit.is_valid())
+                slits.push_back(std::move(slit));
+        }
+    }
+
+    return slits.empty() ? Polygons{} : union_(slits);
 }
 
 Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons &anchoring, const coord_t seed_expansion)
@@ -246,7 +275,30 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
         return;
     }
 
-    auto support_score = [](const Polyline &candidate, const ExtrusionPaths &support_paths, coord_t support_reach, coord_t prefix_length) {
+    auto point_at_distance = [](const Polyline &line, double distance) {
+        if (line.points.empty())
+            return Point{};
+        if (distance <= 0. || line.points.size() == 1)
+            return line.first_point();
+
+        double walked = 0.;
+        for (size_t i = 1; i < line.points.size(); ++i) {
+            const Vec2d a = line.points[i - 1].cast<double>();
+            const Vec2d b = line.points[i].cast<double>();
+            const Vec2d segment = b - a;
+            const double segment_length = segment.norm();
+            if (segment_length <= 0.)
+                continue;
+            if (walked + segment_length >= distance) {
+                const double t = (distance - walked) / segment_length;
+                return Point((a + t * segment).cast<coord_t>());
+            }
+            walked += segment_length;
+        }
+        return line.last_point();
+    };
+
+    auto support_score = [&point_at_distance](const Polyline &candidate, const ExtrusionPaths &support_paths, coord_t support_reach, coord_t prefix_length) {
         if (support_paths.empty() || candidate.points.size() < 2)
             return -1.;
 
@@ -454,85 +506,65 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         ExtrusionPaths &overhang_region = wave_paths.emplace_back();
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
-            Polygons wave_cover_polygons = to_polygons(wave_cover);
-            const Polygons &seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : wave_cover_polygons;
-            const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : wave_cover;
-            Polygons anchoring = intersection(expand(seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
-            Polylines seeds    = generate_wave_overhang_seeds(seed_boundary, anchoring, seed_expansion);
-            if (seeds.empty())
-                continue;
+            ExPolygons split_wave_covers = { wave_cover };
+            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing); ! split_slits.empty())
+                split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
 
-            Polygons trim_boundary = shrink(wave_cover_polygons, std::max<coord_t>(1, wave_flow.scaled_width() / 2), jtRound, 0.);
-            if (trim_boundary.empty())
-                trim_boundary = shrink(wave_cover_polygons, 0.1 * base_spacing);
-            if (trim_boundary.empty())
-                trim_boundary = wave_cover_polygons;
+            for (const ExPolygon &split_wave_cover : split_wave_covers) {
+                Polygons wave_cover_polygons = to_polygons(split_wave_cover);
+                const Polygons &seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : wave_cover_polygons;
+                const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : split_wave_cover;
+                Polygons anchoring = intersection(expand(seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
+                Polylines seeds    = generate_wave_overhang_seeds(seed_boundary, anchoring, seed_expansion);
+                if (seeds.empty())
+                    continue;
 
-            const coord_t seed_offset = additional_shell_count > 0 ? shell_inner_edge + seed_expansion : seed_expansion;
-            Polygons accumulated_region = intersection(offset(seeds, float(seed_offset), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
-            if (accumulated_region.empty())
-                continue;
+                Polygons trim_boundary = shrink(wave_cover_polygons, std::max<coord_t>(1, wave_flow.scaled_width() / 2), jtRound, 0.);
+                if (trim_boundary.empty())
+                    trim_boundary = shrink(wave_cover_polygons, 0.1 * base_spacing);
+                if (trim_boundary.empty())
+                    trim_boundary = wave_cover_polygons;
 
-            std::vector<Polylines> front_levels;
-            Polylines active_fronts;
-            const double min_surviving_front_length = 2.0 * double(wave_spacing);
-            double accumulated_area = area(accumulated_region);
-            for (;;) {
-                Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
-                if (next_region.empty())
-                    break;
+                const coord_t seed_offset = additional_shell_count > 0 ? shell_inner_edge + seed_expansion : seed_expansion;
+                Polygons accumulated_region = intersection(offset(seeds, float(seed_offset), jtRound, 0., ClipperLib::etOpenRound), wave_cover_polygons);
+                if (accumulated_region.empty())
+                    continue;
 
-                double next_area = area(next_region);
-                if (next_area <= accumulated_area + min_area_growth)
-                    break;
-
-                Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
-                for (Polyline &front : fronts)
-                    front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
-                fronts.erase(
-                    std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
-                    fronts.end());
-                fronts = reconnect_polylines(fronts, wave_spacing);
-
-                if (! fronts.empty()) {
-                    Polylines accepted_fronts;
-                    Polylines next_active_fronts;
-                    accepted_fronts.reserve(fronts.size());
-
-                    for (Polyline &front : fronts) {
-                        if (! front_has_active_parent(front, active_fronts, wave_spacing))
-                            continue;
-
-                        if (front.points.size() < 2)
-                            continue;
-
-                        if (front.length() >= min_surviving_front_length)
-                            next_active_fronts.push_back(front);
-                        accepted_fronts.push_back(std::move(front));
-                    }
-
-                    if (! accepted_fronts.empty())
-                        front_levels.emplace_back(std::move(accepted_fronts));
-
-                    active_fronts = std::move(next_active_fronts);
-                    if (active_fronts.empty())
+                std::vector<Polylines> front_levels;
+                double accumulated_area = area(accumulated_region);
+                for (;;) {
+                    Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
+                    if (next_region.empty())
                         break;
-                } else {
-                    break;
+
+                    double next_area = area(next_region);
+                    if (next_area <= accumulated_area + min_area_growth)
+                        break;
+
+                    Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
+                    for (Polyline &front : fronts)
+                        front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
+                    fronts.erase(
+                        std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
+                        fronts.end());
+                    fronts = reconnect_polylines(fronts, wave_spacing);
+
+                    if (! fronts.empty())
+                        front_levels.emplace_back(std::move(fronts));
+
+                    accumulated_region = std::move(next_region);
+                    accumulated_area   = next_area;
                 }
 
-                accumulated_region = std::move(next_region);
-                accumulated_area   = next_area;
-            }
-
-            if (! front_levels.empty()) {
-                if (wave_pattern == WaveOverhangPattern::ZigZag) {
-                    append_zig_zag_front_levels(overhang_region, front_levels, wave_flow, zig_zag_connector_limit);
-                } else {
-                    Polylines collected_fronts;
-                    for (const Polylines &level : front_levels)
-                        collected_fronts.insert(collected_fronts.end(), level.begin(), level.end());
-                    append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
+                if (! front_levels.empty()) {
+                    if (wave_pattern == WaveOverhangPattern::ZigZag) {
+                        append_zig_zag_front_levels(overhang_region, front_levels, wave_flow, zig_zag_connector_limit);
+                    } else {
+                        Polylines collected_fronts;
+                        for (const Polylines &level : front_levels)
+                            collected_fronts.insert(collected_fronts.end(), level.begin(), level.end());
+                        append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
+                    }
                 }
             }
         }
