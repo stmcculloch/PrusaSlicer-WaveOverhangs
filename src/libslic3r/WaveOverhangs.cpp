@@ -378,6 +378,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
     const coord_t filled_area_regularization = std::max<coord_t>(1, base_spacing / 2);
     const coord_t zig_zag_connector_limit = std::max<coord_t>(wave_spacing, wave_flow.scaled_width()) + perimeter_overlap;
+    const coord_t min_front_length   = 2 * wave_spacing;
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -432,10 +433,6 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 if (next_region.empty())
                     break;
 
-                double next_area = area(next_region);
-                if (next_area <= accumulated_area + min_area_growth)
-                    break;
-
                 Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
                 for (Polyline &front : fronts)
                     front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
@@ -444,8 +441,25 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     fronts.end());
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
-                if (! fronts.empty())
-                    front_levels.emplace_back(std::move(fronts));
+                fronts.erase(
+                    std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
+                        return front.length() < min_front_length;
+                    }),
+                    fronts.end());
+                if (fronts.empty())
+                    break;
+
+                next_region = intersection(
+                    offset(fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound),
+                    next_region);
+                if (next_region.empty())
+                    break;
+
+                double next_area = area(next_region);
+                if (next_area <= accumulated_area + min_area_growth)
+                    break;
+
+                front_levels.emplace_back(fronts);
 
                 accumulated_region = std::move(next_region);
                 accumulated_area   = next_area;
