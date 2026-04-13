@@ -667,12 +667,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
             if (split_debug_ptr != nullptr) {
                 split_debug.split_wave_covers = split_wave_covers;
-                const bool had_narrow_signal = std::any_of(
-                    split_debug.levels.begin(),
-                    split_debug.levels.end(),
-                    [](const NarrowSplitDebugLevel &level) { return level.inset_components.size() > 1 || ! level.closest_pairs.empty(); });
-                if (had_narrow_signal || ! split_debug.final_slits.empty())
-                    export_narrow_split_debug_svg(split_debug);
+                export_narrow_split_debug_svg(split_debug);
             }
 
             for (const ExPolygon &split_wave_cover : split_wave_covers) {
