@@ -430,47 +430,37 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             std::vector<Polylines> front_levels;
             double accumulated_area = area(accumulated_region);
             for (;;) {
-                Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
-                if (next_region.empty())
+                Polygons raw_next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
+                if (raw_next_region.empty())
                     break;
 
-                double next_area = area(next_region);
-                if (next_area <= accumulated_area + min_area_growth)
+                double raw_next_area = area(raw_next_region);
+                if (raw_next_area <= accumulated_area + min_area_growth)
                     break;
 
-                Polygons  surviving_region;
-                Polylines level_fronts;
+                Polylines fronts = intersection_pl(to_polylines(raw_next_region), trim_boundary);
+                for (Polyline &front : fronts)
+                    front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
+                fronts.erase(
+                    std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
+                    fronts.end());
+                fronts = reconnect_polylines(fronts, wave_spacing);
 
-                for (Polygon &next_component : next_region) {
-                    Polygons component_region{ next_component };
-                    Polylines fronts = intersection_pl(to_polylines(component_region), trim_boundary);
-                    for (Polyline &front : fronts)
-                        front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
-                    fronts.erase(
-                        std::remove_if(fronts.begin(), fronts.end(), [](const Polyline &front) { return front.points.size() < 2; }),
-                        fronts.end());
-                    fronts = reconnect_polylines(fronts, wave_spacing);
-
-                    fronts.erase(
-                        std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
-                            return front.length() < min_front_length;
-                        }),
-                        fronts.end());
-                    if (fronts.empty())
-                        continue;
-
-                    level_fronts.insert(level_fronts.end(),
-                                        std::make_move_iterator(fronts.begin()),
-                                        std::make_move_iterator(fronts.end()));
-                    surviving_region.push_back(std::move(next_component));
-                }
-
-                if (level_fronts.empty())
+                fronts.erase(
+                    std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
+                        return front.length() < min_front_length;
+                    }),
+                    fronts.end());
+                if (fronts.empty())
                     break;
 
-                front_levels.emplace_back(std::move(level_fronts));
-                accumulated_region = std::move(surviving_region);
-                accumulated_area   = area(accumulated_region);
+                front_levels.emplace_back(fronts);
+                accumulated_region = intersection(
+                    offset(fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound),
+                    raw_next_region);
+                if (accumulated_region.empty())
+                    break;
+                accumulated_area = raw_next_area;
             }
 
             if (! front_levels.empty()) {
