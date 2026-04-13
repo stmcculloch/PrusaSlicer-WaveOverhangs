@@ -34,6 +34,8 @@ Available settings:
 
 Wave overhangs is available through the print settings shown above and is intended for unsupported overhang regions where you want to reduce or avoid support material.
 
+For a more user-focused explanation of the feature set, pattern choices, recommended starting values, and the rollout history in this fork, see [Wave Overhangs Guide](docs/wave-overhangs.md).
+
 ---
 
 You may want to check the [PrusaSlicer project page](https://www.prusa3d.com/prusaslicer/).
