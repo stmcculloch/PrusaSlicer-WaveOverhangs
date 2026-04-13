@@ -110,6 +110,12 @@ enum InfillPattern : int {
     ipCount,
 };
 
+enum class WaveOverhangPattern : int {
+    Monotonic,
+    ZigZag,
+    Smart
+};
+
 enum class IroningType {
     TopSurfaces,
     TopmostOnly,
@@ -725,7 +731,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionBool,                 wave_overhangs))
     ((ConfigOptionInt,                  wave_overhang_outer_perimeters))
     ((ConfigOptionFloat,                wave_overhang_perimeter_overlap))
-    ((ConfigOptionEnum<InfillPattern>,  wave_overhang_pattern))
+    ((ConfigOptionEnum<WaveOverhangPattern>, wave_overhang_pattern))
     ((ConfigOptionFloat,                wave_overhang_line_spacing))
     ((ConfigOptionFloat,                wave_overhang_line_width))
     ((ConfigOptionFloat,                wave_overhang_print_speed))

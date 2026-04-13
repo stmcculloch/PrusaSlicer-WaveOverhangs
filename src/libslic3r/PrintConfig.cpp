@@ -151,6 +151,13 @@ static const t_config_enum_values s_keys_map_InfillPattern {
 };
 CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(InfillPattern)
 
+static const t_config_enum_values s_keys_map_WaveOverhangPattern {
+    { "monotonic", int(WaveOverhangPattern::Monotonic) },
+    { "zigzag",    int(WaveOverhangPattern::ZigZag) },
+    { "smart",     int(WaveOverhangPattern::Smart) }
+};
+CONFIG_OPTION_ENUM_DEFINE_STATIC_MAPS(WaveOverhangPattern)
+
 static const t_config_enum_values s_keys_map_IroningType {
     { "top",            int(IroningType::TopSurfaces) },
     { "topmost",        int(IroningType::TopmostOnly) },
@@ -1172,13 +1179,14 @@ void PrintConfigDef::init_fff_params()
     def = this->add("wave_overhang_pattern", coEnum);
     def->label = L("Wave overhang pattern");
     def->category = L("Layers and Perimeters");
-    def->tooltip = L("Controls whether wave-overhang tracks are printed one direction at a time or connected into a back-and-forth meander.");
-    def->set_enum<InfillPattern>({
+    def->tooltip = L("Controls whether wave-overhang tracks are printed one direction at a time, connected into a back-and-forth meander, or started from the better-supported end of each new wave line.");
+    def->set_enum<WaveOverhangPattern>({
         { "monotonic", L("Monotonic") },
-        { "zigzag",    L("Zig Zag") }
+        { "zigzag",    L("Zig Zag") },
+        { "smart",     L("Smart") }
     });
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionEnum<InfillPattern>(ipZigZag));
+    def->set_default_value(new ConfigOptionEnum<WaveOverhangPattern>(WaveOverhangPattern::ZigZag));
 
     def = this->add("wave_overhang_line_spacing", coFloat);
     def->label = L("Wave overhang line spacing");

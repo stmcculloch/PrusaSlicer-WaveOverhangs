@@ -5,6 +5,7 @@
 #include "WaveOverhangs.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <unordered_map>
 #include <utility>
@@ -13,6 +14,7 @@
 #include "BoundingBox.hpp"
 #include "ClipperUtils.hpp"
 #include "ExtrusionEntity.hpp"
+#include "Line.hpp"
 #include "Polyline.hpp"
 #include "libslic3r.h"
 
@@ -123,49 +125,138 @@ void append_shell_perimeters(ExtrusionPaths &overhang_region,
 }
 
 void append_wave_fronts(ExtrusionPaths &overhang_region,
-                        Polylines      &&fronts,
-                        const Flow     &wave_flow,
-                        coord_t         connector_limit,
-                        bool            zig_zag)
+                        const Polylines &fronts,
+                        const Flow      &wave_flow,
+                        coord_t          connector_limit,
+                        WaveOverhangPattern wave_pattern)
 {
     if (fronts.empty())
         return;
 
-    if (! zig_zag) {
+    if (wave_pattern == WaveOverhangPattern::Monotonic) {
         extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
         return;
     }
 
-    Polylines merged;
-    merged.reserve(fronts.size());
-    for (Polyline &front : fronts) {
+    if (wave_pattern == WaveOverhangPattern::ZigZag) {
+        Polylines merged;
+        merged.reserve(fronts.size());
+        for (const Polyline &source_front : fronts) {
+            Polyline front = source_front;
+            if (front.points.size() < 2)
+                continue;
+
+            if (merged.empty()) {
+                merged.emplace_back(std::move(front));
+                continue;
+            }
+
+            Polyline &current = merged.back();
+            const double d_keep = (current.last_point() - front.first_point()).cast<double>().norm();
+            const double d_flip = (current.last_point() - front.last_point()).cast<double>().norm();
+            const double best_d = std::min(d_keep, d_flip);
+
+            if (best_d > connector_limit) {
+                merged.emplace_back(std::move(front));
+                continue;
+            }
+
+            if (d_flip < d_keep)
+                front.reverse();
+            if (current.last_point() == front.first_point())
+                current.append(front.points.begin() + 1, front.points.end());
+            else
+                current.append(std::move(front));
+        }
+
+        extrusion_paths_append(overhang_region, merged, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        return;
+    }
+
+    auto point_at_distance = [](const Polyline &line, double distance) {
+        if (line.points.empty())
+            return Point{};
+        if (distance <= 0. || line.points.size() == 1)
+            return line.first_point();
+
+        double walked = 0.;
+        for (size_t i = 1; i < line.points.size(); ++i) {
+            const Vec2d a = line.points[i - 1].cast<double>();
+            const Vec2d b = line.points[i].cast<double>();
+            const Vec2d segment = b - a;
+            const double segment_length = segment.norm();
+            if (segment_length <= 0.)
+                continue;
+            if (walked + segment_length >= distance) {
+                const double t = (distance - walked) / segment_length;
+                return Point((a + t * segment).cast<coord_t>());
+            }
+            walked += segment_length;
+        }
+        return line.last_point();
+    };
+
+    auto support_score = [&point_at_distance](const Polyline &candidate, const ExtrusionPaths &support_paths, coord_t support_reach, coord_t prefix_length) {
+        if (support_paths.empty() || candidate.points.size() < 2)
+            return -1.;
+
+        const double candidate_length = candidate.length();
+        if (candidate_length <= 0.)
+            return -1.;
+
+        const double sample_length = std::min(candidate_length, double(std::max<coord_t>(1, prefix_length)));
+        const std::array<std::pair<double, double>, 3> samples = {{
+            { 0.0,               3.0 },
+            { 0.5 * sample_length, 2.0 },
+            { sample_length,     1.0 }
+        }};
+
+        double best_score = -1.;
+        for (auto it = support_paths.rbegin(); it != support_paths.rend(); ++it) {
+            if (it->polyline.points.size() < 2)
+                continue;
+
+            double score = 0.;
+            for (const auto &[distance_along, weight] : samples) {
+                Point sample = point_at_distance(candidate, distance_along);
+                auto [seg_idx, foot] = foot_pt(it->polyline.points, sample);
+                if (seg_idx < 0 || size_t(seg_idx + 1) >= it->polyline.points.size())
+                    continue;
+
+                const Point &a = it->polyline.points[size_t(seg_idx)];
+                const Point &b = it->polyline.points[size_t(seg_idx + 1)];
+                const bool interior_projection = foot != a && foot != b;
+                const double distance_to_support = (sample - foot).cast<double>().norm();
+                const double normalized_support = std::max(0.0, 1.0 - distance_to_support / double(std::max<coord_t>(1, support_reach)));
+
+                score += weight * (3.0 * normalized_support + (interior_projection ? 1.5 : 0.2));
+            }
+
+            best_score = std::max(best_score, score);
+        }
+
+        return best_score;
+    };
+
+    ExtrusionPaths support_paths = overhang_region;
+    const coord_t support_reach = std::max<coord_t>(wave_flow.scaled_width(), connector_limit);
+    const coord_t prefix_length = std::max<coord_t>(wave_flow.scaled_width(), connector_limit / 2);
+
+    for (const Polyline &source_front : fronts) {
+        Polyline front = source_front;
         if (front.points.size() < 2)
             continue;
 
-        if (merged.empty()) {
-            merged.emplace_back(std::move(front));
-            continue;
-        }
-
-        Polyline &current = merged.back();
-        const double d_keep = (current.last_point() - front.first_point()).cast<double>().norm();
-        const double d_flip = (current.last_point() - front.last_point()).cast<double>().norm();
-        const double best_d = std::min(d_keep, d_flip);
-
-        if (best_d > connector_limit) {
-            merged.emplace_back(std::move(front));
-            continue;
-        }
-
-        if (d_flip < d_keep)
+        Polyline reversed = front;
+        reversed.reverse();
+        const double forward_score = support_score(front, support_paths, support_reach, prefix_length);
+        const double reverse_score = support_score(reversed, support_paths, support_reach, prefix_length);
+        if (reverse_score > forward_score)
             front.reverse();
-        if (current.last_point() == front.first_point())
-            current.append(front.points.begin() + 1, front.points.end());
-        else
-            current.append(std::move(front));
-    }
 
-    extrusion_paths_append(overhang_region, merged, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        support_paths.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+    }
 }
 
 } // namespace
@@ -176,7 +267,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     int             perimeter_count,
     int             additional_shell_count,
     double          wave_perimeter_overlap,
-    bool            wave_zig_zag,
+    WaveOverhangPattern wave_pattern,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
@@ -189,7 +280,6 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
-    const coord_t trim_inset         = std::max<coord_t>(std::max<coord_t>(1, wave_flow.scaled_width() / 2), shell_inner_edge + wave_flow.scaled_width() / 2);
     const coord_t filled_area_regularization = std::max<coord_t>(1, base_spacing / 2);
     const coord_t zig_zag_connector_limit = std::max<coord_t>(wave_spacing, wave_flow.scaled_width()) + perimeter_overlap;
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
@@ -239,6 +329,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             if (accumulated_region.empty())
                 continue;
 
+            Polylines collected_fronts;
             double accumulated_area = area(accumulated_region);
             for (;;) {
                 Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
@@ -258,11 +349,14 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
                 if (! fronts.empty())
-                    append_wave_fronts(overhang_region, std::move(fronts), wave_flow, zig_zag_connector_limit, wave_zig_zag);
+                    collected_fronts.insert(collected_fronts.end(), fronts.begin(), fronts.end());
 
                 accumulated_region = std::move(next_region);
                 accumulated_area   = next_area;
             }
+
+            if (! collected_fronts.empty())
+                append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
         }
 
         overhang_region.erase(
