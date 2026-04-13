@@ -103,6 +103,34 @@ TEST_CASE("Wave overhang zig-zag connects adjacent fronts into fewer paths", "[W
     CHECK(zigzag_count < monotonic_count);
 }
 
+TEST_CASE("Wave overhang zig-zag stays depth-first when fronts split around a hole", "[WaveOverhangs]")
+{
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 50, 0 }, { 50, 30 }, { 0, 30 } }) };
+    infill.holes.emplace_back(Polygon::new_scale({ { 18, 8 }, { 32, 8 }, { 32, 22 }, { 18, 22 } }));
+
+    Polygons lower_support = {
+        Polygon::new_scale({ { 0, 0 }, { 14, 0 }, { 14, 30 }, { 0, 30 } })
+    };
+
+    Flow flow(1., 1., 1.);
+    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::Monotonic, 1.0, 0.75, flow, scale_(0.01));
+    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
+
+    REQUIRE(! monotonic_regions.empty());
+    REQUIRE(! zigzag_regions.empty());
+    CHECK(! monotonic_filled.empty());
+    CHECK(! zigzag_filled.empty());
+
+    size_t monotonic_count = 0;
+    for (const ExtrusionPaths &paths : monotonic_regions)
+        monotonic_count += paths.size();
+    size_t zigzag_count = 0;
+    for (const ExtrusionPaths &paths : zigzag_regions)
+        zigzag_count += paths.size();
+
+    CHECK(zigzag_count < monotonic_count);
+}
+
 TEST_CASE("Wave overhang smart mode still generates supported fronts", "[WaveOverhangs]")
 {
     ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };

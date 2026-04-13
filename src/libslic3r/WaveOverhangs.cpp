@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <unordered_map>
 #include <utility>
 
@@ -260,6 +261,100 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
     }
 }
 
+void append_zig_zag_front_levels(ExtrusionPaths               &overhang_region,
+                                 const std::vector<Polylines> &front_levels,
+                                 const Flow                   &wave_flow,
+                                 coord_t                       connector_limit)
+{
+    if (front_levels.empty())
+        return;
+
+    std::vector<std::vector<bool>> used;
+    used.reserve(front_levels.size());
+    for (const Polylines &level : front_levels)
+        used.emplace_back(level.size(), false);
+
+    const double max_connector_distance_sq = double(connector_limit) * double(connector_limit);
+
+    auto append_or_start = [&](Polyline &&front) {
+        if (overhang_region.empty()) {
+            overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+            return;
+        }
+
+        ExtrusionPath &current = overhang_region.back();
+        const double d_keep = (current.last_point() - front.first_point()).cast<double>().squaredNorm();
+        const double d_flip = (current.last_point() - front.last_point()).cast<double>().squaredNorm();
+        const double best_d = std::min(d_keep, d_flip);
+
+        if (best_d > max_connector_distance_sq) {
+            overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+            return;
+        }
+
+        if (d_flip < d_keep)
+            front.reverse();
+        if (current.last_point() == front.first_point())
+            current.polyline.append(front.points.begin() + 1, front.points.end());
+        else
+            current.polyline.append(std::move(front));
+    };
+
+    std::function<void(size_t, size_t, bool)> follow_branch = [&](size_t level_idx, size_t front_idx, bool reverse_front) {
+        used[level_idx][front_idx] = true;
+        Polyline current = front_levels[level_idx][front_idx];
+        if (current.points.size() < 2)
+            return;
+        if (reverse_front)
+            current.reverse();
+
+        append_or_start(std::move(current));
+
+        for (size_t next_level = level_idx + 1; next_level < front_levels.size(); ++next_level) {
+            size_t best_idx = size_t(-1);
+            bool   reverse_child = false;
+            double best_d = max_connector_distance_sq;
+
+            const Point anchor = overhang_region.back().last_point();
+            for (size_t candidate_idx = 0; candidate_idx < front_levels[next_level].size(); ++candidate_idx) {
+                if (used[next_level][candidate_idx])
+                    continue;
+
+                const Polyline &candidate = front_levels[next_level][candidate_idx];
+                if (candidate.points.size() < 2)
+                    continue;
+
+                const double d_keep = (anchor - candidate.first_point()).cast<double>().squaredNorm();
+                if (d_keep <= best_d) {
+                    best_d = d_keep;
+                    best_idx = candidate_idx;
+                    reverse_child = false;
+                }
+
+                const double d_flip = (anchor - candidate.last_point()).cast<double>().squaredNorm();
+                if (d_flip <= best_d) {
+                    best_d = d_flip;
+                    best_idx = candidate_idx;
+                    reverse_child = true;
+                }
+            }
+
+            if (best_idx == size_t(-1) || best_d > max_connector_distance_sq)
+                break;
+
+            follow_branch(next_level, best_idx, reverse_child);
+            return;
+        }
+    };
+
+    for (size_t level_idx = 0; level_idx < front_levels.size(); ++level_idx) {
+        for (size_t front_idx = 0; front_idx < front_levels[level_idx].size(); ++front_idx) {
+            if (! used[level_idx][front_idx])
+                follow_branch(level_idx, front_idx, false);
+        }
+    }
+}
+
 } // namespace
 
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
@@ -330,7 +425,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             if (accumulated_region.empty())
                 continue;
 
-            Polylines collected_fronts;
+            std::vector<Polylines> front_levels;
             double accumulated_area = area(accumulated_region);
             for (;;) {
                 Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
@@ -350,14 +445,22 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
                 if (! fronts.empty())
-                    collected_fronts.insert(collected_fronts.end(), fronts.begin(), fronts.end());
+                    front_levels.emplace_back(std::move(fronts));
 
                 accumulated_region = std::move(next_region);
                 accumulated_area   = next_area;
             }
 
-            if (! collected_fronts.empty())
-                append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
+            if (! front_levels.empty()) {
+                if (wave_pattern == WaveOverhangPattern::ZigZag) {
+                    append_zig_zag_front_levels(overhang_region, front_levels, wave_flow, zig_zag_connector_limit);
+                } else {
+                    Polylines collected_fronts;
+                    for (const Polylines &level : front_levels)
+                        collected_fronts.insert(collected_fronts.end(), level.begin(), level.end());
+                    append_wave_fronts(overhang_region, collected_fronts, wave_flow, zig_zag_connector_limit, wave_pattern);
+                }
+            }
         }
 
         overhang_region.erase(
