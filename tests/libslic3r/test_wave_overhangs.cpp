@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/catch_approx.hpp>
 
 #include "libslic3r/ClipperUtils.hpp"
 #include "libslic3r/WaveOverhangs.hpp"
@@ -13,7 +14,7 @@ TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverh
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
@@ -32,7 +33,7 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
 
@@ -54,8 +55,8 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     };
 
     Flow flow(1., 1., 1.);
-    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::Monotonic, 1.0, 1.0, flow, scale_(0.01));
-    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.1, WaveOverhangPattern::ZigZag, 0.75, 0.5, flow, scale_(0.01));
+    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Monotonic, 1.0, 1.0, flow, scale_(0.01));
+    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.1, 2.0, WaveOverhangPattern::ZigZag, 0.75, 0.5, flow, scale_(0.01));
 
     REQUIRE(! baseline_regions.empty());
     REQUIRE(! modified_regions.empty());
@@ -66,9 +67,9 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     bool saw_shell_width_path = false;
     for (const ExtrusionPaths &paths : modified_regions) {
         for (const ExtrusionPath &path : paths) {
-            if (path.width() == Approx(0.5f))
+            if (path.width() == Catch::Approx(0.5f))
                 saw_wave_width_path = true;
-            if (path.width() == Approx(1.0f))
+            if (path.width() == Catch::Approx(1.0f))
                 saw_shell_width_path = true;
         }
     }
@@ -85,8 +86,8 @@ TEST_CASE("Wave overhang zig-zag connects adjacent fronts into fewer paths", "[W
     };
 
     Flow flow(1., 1., 1.);
-    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::Monotonic, 1.0, 0.75, flow, scale_(0.01));
-    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
+    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Monotonic, 1.0, 0.75, flow, scale_(0.01));
+    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! monotonic_regions.empty());
     REQUIRE(! zigzag_regions.empty());
@@ -113,8 +114,8 @@ TEST_CASE("Wave overhang zig-zag stays depth-first when fronts split around a ho
     };
 
     Flow flow(1., 1., 1.);
-    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::Monotonic, 1.0, 0.75, flow, scale_(0.01));
-    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
+    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Monotonic, 1.0, 0.75, flow, scale_(0.01));
+    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::ZigZag, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! monotonic_regions.empty());
     REQUIRE(! zigzag_regions.empty());
@@ -139,7 +140,7 @@ TEST_CASE("Wave overhang smart mode still generates supported fronts", "[WaveOve
     };
 
     Flow flow(1., 1., 1.);
-    auto [smart_regions, smart_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01));
+    auto [smart_regions, smart_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! smart_regions.empty());
     CHECK(! smart_filled.empty());
