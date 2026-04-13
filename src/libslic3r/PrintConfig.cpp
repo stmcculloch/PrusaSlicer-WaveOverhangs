@@ -1167,7 +1167,7 @@ void PrintConfigDef::init_fff_params()
     def->sidetext = L("mm");
     def->min = 0;
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionFloat(0.05));
+    def->set_default_value(new ConfigOptionFloat(0.1));
 
     def = this->add("wave_overhang_line_spacing", coFloat);
     def->label = L("Wave overhang line spacing");
