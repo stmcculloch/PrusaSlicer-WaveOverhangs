@@ -8,7 +8,6 @@
 #include <array>
 #include <cmath>
 #include <functional>
-#include <iterator>
 #include <unordered_map>
 #include <utility>
 
@@ -74,6 +73,77 @@ Polylines reconnect_polylines(const Polylines &polylines, double limit_distance)
     for (auto &entry : connected)
         result.push_back(std::move(entry.second));
     return result;
+}
+
+Point point_at_distance(const Polyline &line, double distance)
+{
+    if (line.points.empty())
+        return Point{};
+    if (distance <= 0. || line.points.size() == 1)
+        return line.first_point();
+
+    double walked = 0.;
+    for (size_t i = 1; i < line.points.size(); ++i) {
+        const Vec2d a = line.points[i - 1].cast<double>();
+        const Vec2d b = line.points[i].cast<double>();
+        const Vec2d segment = b - a;
+        const double segment_length = segment.norm();
+        if (segment_length <= 0.)
+            continue;
+        if (walked + segment_length >= distance) {
+            const double t = (distance - walked) / segment_length;
+            return Point((a + t * segment).cast<coord_t>());
+        }
+        walked += segment_length;
+    }
+    return line.last_point();
+}
+
+double front_lineage_score(const Polyline &candidate, const Polyline &parent, coord_t support_reach)
+{
+    if (candidate.points.size() < 2 || parent.points.size() < 2)
+        return -1.;
+
+    const double candidate_length = candidate.length();
+    if (candidate_length <= 0.)
+        return -1.;
+
+    const double sample_length = std::min(candidate_length, double(std::max<coord_t>(1, support_reach)));
+    const std::array<std::pair<double, double>, 3> samples = {{
+        { 0.0,                 3.0 },
+        { 0.5 * sample_length, 2.0 },
+        { sample_length,       1.0 }
+    }};
+
+    double score = 0.;
+    for (const auto &[distance_along, weight] : samples) {
+        Point sample = point_at_distance(candidate, distance_along);
+        auto [seg_idx, foot] = foot_pt(parent.points, sample);
+        if (seg_idx < 0 || size_t(seg_idx + 1) >= parent.points.size())
+            continue;
+
+        const Point &a = parent.points[size_t(seg_idx)];
+        const Point &b = parent.points[size_t(seg_idx + 1)];
+        const bool interior_projection = foot != a && foot != b;
+        const double distance_to_parent = (sample - foot).cast<double>().norm();
+        const double normalized_support = std::max(0.0, 1.0 - distance_to_parent / double(std::max<coord_t>(1, support_reach)));
+
+        score += weight * (3.0 * normalized_support + (interior_projection ? 1.5 : 0.2));
+    }
+
+    return score;
+}
+
+bool front_has_active_parent(const Polyline &candidate, const Polylines &active_fronts, coord_t support_reach)
+{
+    if (active_fronts.empty())
+        return true;
+
+    double best_score = -1.;
+    for (const Polyline &parent : active_fronts)
+        best_score = std::max(best_score, front_lineage_score(candidate, parent, support_reach));
+
+    return best_score >= 6.0;
 }
 
 Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons &anchoring, const coord_t seed_expansion)
@@ -176,30 +246,7 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
         return;
     }
 
-    auto point_at_distance = [](const Polyline &line, double distance) {
-        if (line.points.empty())
-            return Point{};
-        if (distance <= 0. || line.points.size() == 1)
-            return line.first_point();
-
-        double walked = 0.;
-        for (size_t i = 1; i < line.points.size(); ++i) {
-            const Vec2d a = line.points[i - 1].cast<double>();
-            const Vec2d b = line.points[i].cast<double>();
-            const Vec2d segment = b - a;
-            const double segment_length = segment.norm();
-            if (segment_length <= 0.)
-                continue;
-            if (walked + segment_length >= distance) {
-                const double t = (distance - walked) / segment_length;
-                return Point((a + t * segment).cast<coord_t>());
-            }
-            walked += segment_length;
-        }
-        return line.last_point();
-    };
-
-    auto support_score = [&point_at_distance](const Polyline &candidate, const ExtrusionPaths &support_paths, coord_t support_reach, coord_t prefix_length) {
+    auto support_score = [](const Polyline &candidate, const ExtrusionPaths &support_paths, coord_t support_reach, coord_t prefix_length) {
         if (support_paths.empty() || candidate.points.size() < 2)
             return -1.;
 
@@ -379,7 +426,6 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
     const coord_t filled_area_regularization = std::max<coord_t>(1, base_spacing / 2);
     const coord_t zig_zag_connector_limit = std::max<coord_t>(wave_spacing, wave_flow.scaled_width()) + perimeter_overlap;
-    const coord_t min_front_length   = 2 * wave_spacing;
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -428,17 +474,19 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 continue;
 
             std::vector<Polylines> front_levels;
+            Polylines active_fronts;
+            const double min_surviving_front_length = 2.0 * double(wave_spacing);
             double accumulated_area = area(accumulated_region);
             for (;;) {
-                Polygons raw_next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
-                if (raw_next_region.empty())
+                Polygons next_region = intersection(offset(accumulated_region, float(wave_spacing), jtRound, 0.), wave_cover_polygons);
+                if (next_region.empty())
                     break;
 
-                double raw_next_area = area(raw_next_region);
-                if (raw_next_area <= accumulated_area + min_area_growth)
+                double next_area = area(next_region);
+                if (next_area <= accumulated_area + min_area_growth)
                     break;
 
-                Polylines fronts = intersection_pl(to_polylines(raw_next_region), trim_boundary);
+                Polylines fronts = intersection_pl(to_polylines(next_region), trim_boundary);
                 for (Polyline &front : fronts)
                     front.simplify(std::min(0.05 * wave_spacing, scaled_resolution));
                 fronts.erase(
@@ -446,21 +494,35 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     fronts.end());
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
-                fronts.erase(
-                    std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
-                        return front.length() < min_front_length;
-                    }),
-                    fronts.end());
-                if (fronts.empty())
-                    break;
+                if (! fronts.empty()) {
+                    Polylines accepted_fronts;
+                    Polylines next_active_fronts;
+                    accepted_fronts.reserve(fronts.size());
 
-                front_levels.emplace_back(fronts);
-                accumulated_region = intersection(
-                    offset(fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound),
-                    raw_next_region);
-                if (accumulated_region.empty())
+                    for (Polyline &front : fronts) {
+                        if (! front_has_active_parent(front, active_fronts, wave_spacing))
+                            continue;
+
+                        if (front.points.size() < 2)
+                            continue;
+
+                        if (front.length() >= min_surviving_front_length)
+                            next_active_fronts.push_back(front);
+                        accepted_fronts.push_back(std::move(front));
+                    }
+
+                    if (! accepted_fronts.empty())
+                        front_levels.emplace_back(std::move(accepted_fronts));
+
+                    active_fronts = std::move(next_active_fronts);
+                    if (active_fronts.empty())
+                        break;
+                } else {
                     break;
-                accumulated_area = raw_next_area;
+                }
+
+                accumulated_region = std::move(next_region);
+                accumulated_area   = next_area;
             }
 
             if (! front_levels.empty()) {
