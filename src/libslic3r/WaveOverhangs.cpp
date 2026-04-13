@@ -252,6 +252,29 @@ size_t total_hole_count(const ExPolygons &expolygons)
     return count;
 }
 
+bool slit_changes_topology(const ExPolygon &wave_cover, const Polygon &slit)
+{
+    if (! slit.is_valid())
+        return false;
+
+    const ExPolygons split_result = union_ex(diff_ex(ExPolygons{ wave_cover }, Polygons{ slit }));
+    return split_result.size() != 1 || total_hole_count(split_result) != wave_cover.holes.size();
+}
+
+Polygon make_effective_split_slit(const ExPolygon &wave_cover, const Point &a, const Point &b, coord_t extension, coord_t initial_half_width)
+{
+    coord_t half_width = std::max<coord_t>(1, initial_half_width);
+    for (int attempt = 0; attempt < 6; ++attempt) {
+        Polygon slit = make_split_slit(a, b, extension, half_width);
+        if (slit_changes_topology(wave_cover, slit))
+            return slit;
+
+        half_width = std::max<coord_t>(half_width + 1, half_width * 2);
+    }
+
+    return {};
+}
+
 Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold, NarrowSplitDebugInfo *debug_info = nullptr)
 {
     const double threshold = std::max(0.0, narrow_split_threshold);
@@ -277,7 +300,7 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
         candidate.b = pair.b;
         candidate.distance_sq = pair.distance_sq;
         candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
-        candidate.slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
+        candidate.slit = make_effective_split_slit(wave_cover, pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
         if (! candidate.slit.is_valid())
             return;
 
