@@ -1160,6 +1160,15 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionInt(1));
 
+    def = this->add("wave_overhang_perimeter_overlap", coFloat);
+    def->label = L("Wave overhang perimeter overlap");
+    def->category = L("Layers and Perimeters");
+    def->tooltip = L("Extends the wave propagation boundary toward nearby perimeter lines so the last wave sits closer to the kept perimeter. This reduces the gap between wave lines and perimeter shells.");
+    def->sidetext = L("mm");
+    def->min = 0;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionFloat(0.05));
+
     def = this->add("wave_overhang_line_spacing", coFloat);
     def->label = L("Wave overhang line spacing");
     def->category = L("Extrusion Width");

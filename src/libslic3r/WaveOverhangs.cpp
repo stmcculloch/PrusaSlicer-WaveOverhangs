@@ -129,6 +129,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Polygons &lower_slices_polygons,
     int             perimeter_count,
     int             additional_shell_count,
+    double          wave_perimeter_overlap,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
@@ -136,6 +137,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 {
     const coord_t base_spacing       = overhang_flow.scaled_spacing();
     const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
+    const coord_t perimeter_overlap  = std::max<coord_t>(0, wave_perimeter_overlap > 0. ? coord_t(scale_(wave_perimeter_overlap)) : 0);
     const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
@@ -160,7 +162,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
     for (const ExPolygon &overhang : union_ex(to_expolygons(inset_overhang_area))) {
         Polygons overhang_to_cover = to_polygons(overhang);
-        Polygons wave_cover_area   = additional_shell_count > 0 ? shrink(overhang_to_cover, shell_inner_edge, jtRound, 0.) : overhang_to_cover;
+        Polygons wave_cover_area   = additional_shell_count > 0 ?
+            shrink(overhang_to_cover, std::max<coord_t>(0, shell_inner_edge - perimeter_overlap), jtRound, 0.) :
+            expand(overhang_to_cover, perimeter_overlap, jtRound, 0.);
         Polygons real_overhang     = intersection(wave_cover_area, overhangs);
         if (real_overhang.empty())
             wave_cover_area.clear();
