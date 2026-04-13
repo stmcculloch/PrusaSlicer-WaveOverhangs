@@ -462,10 +462,16 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                         break;
 
                     Polygons reachable_region;
-                    for (const ExPolygon &component : union_ex(to_expolygons(filtered_region))) {
-                        Polygons component_polygons = to_polygons(component);
-                        if (! intersection(component_polygons, accumulated_region).empty())
-                            append(reachable_region, component_polygons);
+                    reachable_region.reserve(filtered_region.size());
+                    for (const Polygon &component : filtered_region) {
+                        BoundingBox component_bb(component.points);
+                        component_bb.offset(SCALED_EPSILON);
+                        Polygons accumulated_region_clipped =
+                            ClipperUtils::clip_clipper_polygons_with_subject_bbox(accumulated_region, component_bb);
+                        if (! accumulated_region_clipped.empty() &&
+                            ! intersection(Polygons{ component }, accumulated_region_clipped).empty()) {
+                            reachable_region.push_back(component);
+                        }
                     }
 
                     next_region = std::move(reachable_region);
