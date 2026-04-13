@@ -93,6 +93,14 @@ struct ClosestBoundaryPair {
     bool   valid{ false };
 };
 
+struct NarrowSplitCandidate {
+    Point   a;
+    Point   b;
+    Point   midpoint;
+    double  distance_sq{ std::numeric_limits<double>::infinity() };
+    Polygon slit;
+};
+
 ClosestBoundaryPair find_closest_boundary_pair(const ExPolygon &a, const ExPolygon &b, const ExPolygon &container)
 {
     ClosestBoundaryPair best;
@@ -151,29 +159,64 @@ Polygon make_split_slit(const Point &a, const Point &b, coord_t extension, coord
 
 Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold)
 {
-    const ExPolygons inset_components = offset_ex(wave_cover, -float(wave_spacing), jtRound, 0.);
-    if (inset_components.size() <= 1)
-        return {};
-
     const double threshold = std::max(0.0, narrow_split_threshold);
     if (threshold <= 0.)
         return {};
 
     const double max_gap_sq = std::pow(threshold * double(wave_spacing), 2);
     const coord_t slit_half_width = std::max<coord_t>(1, wave_spacing / 20);
-    const coord_t slit_extension  = std::max<coord_t>(slit_half_width, wave_spacing / 5);
+    const coord_t slit_extension  = std::max<coord_t>(slit_half_width, coord_t(std::ceil(threshold * double(wave_spacing))));
+    const std::array<double, 4> inset_fractions{{ 0.25, 0.5, 0.75, 1.0 }};
+    const double duplicate_radius_sq = std::pow(0.5 * double(wave_spacing), 2);
+
+    std::vector<NarrowSplitCandidate> candidates;
+    for (double inset_fraction : inset_fractions) {
+        const coord_t inset_depth = std::max<coord_t>(1, coord_t(std::round(inset_fraction * double(wave_spacing))));
+        const ExPolygons inset_components = offset_ex(wave_cover, -float(inset_depth), jtRound, 0.);
+        if (inset_components.size() <= 1)
+            continue;
+
+        for (size_t i = 0; i < inset_components.size(); ++i) {
+            for (size_t j = i + 1; j < inset_components.size(); ++j) {
+                ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
+                if (! pair.valid || pair.distance_sq > max_gap_sq)
+                    continue;
+
+                NarrowSplitCandidate candidate;
+                candidate.a = pair.a;
+                candidate.b = pair.b;
+                candidate.distance_sq = pair.distance_sq;
+                candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
+                candidate.slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
+                if (candidate.slit.is_valid())
+                    candidates.push_back(std::move(candidate));
+            }
+        }
+    }
+
+    if (candidates.empty())
+        return {};
+
+    std::sort(candidates.begin(), candidates.end(), [](const NarrowSplitCandidate &lhs, const NarrowSplitCandidate &rhs) {
+        return lhs.distance_sq < rhs.distance_sq;
+    });
 
     Polygons slits;
-    for (size_t i = 0; i < inset_components.size(); ++i) {
-        for (size_t j = i + 1; j < inset_components.size(); ++j) {
-            ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
-            if (! pair.valid || pair.distance_sq > max_gap_sq)
-                continue;
-
-            Polygon slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
-            if (slit.is_valid())
-                slits.push_back(std::move(slit));
+    std::vector<Point> kept_midpoints;
+    for (NarrowSplitCandidate &candidate : candidates) {
+        bool duplicate = false;
+        for (const Point &kept_midpoint : kept_midpoints) {
+            if ((candidate.midpoint - kept_midpoint).cast<double>().squaredNorm() <= duplicate_radius_sq) {
+                duplicate = true;
+                break;
+            }
         }
+
+        if (duplicate)
+            continue;
+
+        kept_midpoints.push_back(candidate.midpoint);
+        slits.push_back(std::move(candidate.slit));
     }
 
     return slits.empty() ? Polygons{} : union_(slits);
