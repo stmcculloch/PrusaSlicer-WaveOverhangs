@@ -13,6 +13,8 @@
 #include <unordered_map>
 #include <utility>
 
+#include <boost/filesystem/operations.hpp>
+
 #include "Algorithm/RegionExpansion.hpp"
 #include "BoundingBox.hpp"
 #include "ClipperUtils.hpp"
@@ -129,6 +131,7 @@ bool wave_split_debug_enabled()
 void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
 {
     static int iRun = 0;
+    boost::filesystem::create_directories("out");
 
     BoundingBox bbox = get_extents(ExPolygons{ debug_info.wave_cover });
     bbox.offset(scale_(1.));
@@ -241,6 +244,14 @@ Polygon make_split_slit(const Point &a, const Point &b, coord_t extension, coord
     return slit;
 }
 
+size_t total_hole_count(const ExPolygons &expolygons)
+{
+    size_t count = 0;
+    for (const ExPolygon &expolygon : expolygons)
+        count += expolygon.holes.size();
+    return count;
+}
+
 Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold, NarrowSplitDebugInfo *debug_info = nullptr)
 {
     const double threshold = std::max(0.0, narrow_split_threshold);
@@ -252,8 +263,29 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
     const coord_t slit_extension  = std::max<coord_t>(slit_half_width, coord_t(std::ceil(threshold * double(wave_spacing))));
     const std::array<double, 4> inset_fractions{{ 0.25, 0.5, 0.75, 1.0 }};
     const double duplicate_radius_sq = std::pow(0.5 * double(wave_spacing), 2);
+    const size_t original_hole_count = wave_cover.holes.size();
 
     std::vector<NarrowSplitCandidate> candidates;
+    auto append_candidate = [&](const ClosestBoundaryPair &pair, NarrowSplitDebugLevel *debug_level) {
+        if (debug_level != nullptr && pair.valid)
+            debug_level->closest_pairs.push_back(pair);
+        if (! pair.valid || pair.distance_sq > max_gap_sq)
+            return;
+
+        NarrowSplitCandidate candidate;
+        candidate.a = pair.a;
+        candidate.b = pair.b;
+        candidate.distance_sq = pair.distance_sq;
+        candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
+        candidate.slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
+        if (! candidate.slit.is_valid())
+            return;
+
+        if (debug_level != nullptr)
+            debug_level->candidate_slits.push_back(candidate.slit);
+        candidates.push_back(std::move(candidate));
+    };
+
     for (double inset_fraction : inset_fractions) {
         const coord_t inset_depth = std::max<coord_t>(1, coord_t(std::round(inset_fraction * double(wave_spacing))));
         const ExPolygons inset_components = offset_ex(wave_cover, -float(inset_depth), jtRound, 0.);
@@ -264,27 +296,33 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
             debug_level->inset_depth = inset_depth;
             debug_level->inset_components = inset_components;
         }
-        if (inset_components.size() <= 1)
+        const bool component_count_changed = inset_components.size() > 1;
+        const bool hole_count_changed = total_hole_count(inset_components) != original_hole_count;
+        if (! component_count_changed && ! hole_count_changed)
             continue;
 
-        for (size_t i = 0; i < inset_components.size(); ++i) {
-            for (size_t j = i + 1; j < inset_components.size(); ++j) {
-                ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
-                if (debug_level != nullptr && pair.valid)
-                    debug_level->closest_pairs.push_back(pair);
-                if (! pair.valid || pair.distance_sq > max_gap_sq)
-                    continue;
+        if (component_count_changed) {
+            for (size_t i = 0; i < inset_components.size(); ++i) {
+                for (size_t j = i + 1; j < inset_components.size(); ++j) {
+                    ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
+                    append_candidate(pair, debug_level);
+                }
+            }
+        }
 
-                NarrowSplitCandidate candidate;
-                candidate.a = pair.a;
-                candidate.b = pair.b;
-                candidate.distance_sq = pair.distance_sq;
-                candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
-                candidate.slit = make_split_slit(pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
-                if (candidate.slit.is_valid()) {
-                    if (debug_level != nullptr)
-                        debug_level->candidate_slits.push_back(candidate.slit);
-                    candidates.push_back(std::move(candidate));
+        if (hole_count_changed && ! wave_cover.holes.empty()) {
+            ExPolygon outer_boundary;
+            outer_boundary.contour = wave_cover.contour;
+
+            for (size_t hole_idx = 0; hole_idx < wave_cover.holes.size(); ++hole_idx) {
+                ExPolygon hole_boundary;
+                hole_boundary.contour = wave_cover.holes[hole_idx];
+                append_candidate(find_closest_boundary_pair(outer_boundary, hole_boundary, wave_cover), debug_level);
+
+                for (size_t other_hole_idx = hole_idx + 1; other_hole_idx < wave_cover.holes.size(); ++other_hole_idx) {
+                    ExPolygon other_hole_boundary;
+                    other_hole_boundary.contour = wave_cover.holes[other_hole_idx];
+                    append_candidate(find_closest_boundary_pair(hole_boundary, other_hole_boundary, wave_cover), debug_level);
                 }
             }
         }
