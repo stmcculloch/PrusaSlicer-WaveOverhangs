@@ -727,6 +727,7 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "wave_overhangs"
             || opt_key == "wave_overhang_outer_perimeters"
             || opt_key == "wave_overhang_perimeter_overlap"
+            || opt_key == "wave_overhang_pattern"
             || opt_key == "wave_overhang_line_spacing"
             || opt_key == "wave_overhang_line_width"
             || opt_key == "first_layer_extrusion_width"

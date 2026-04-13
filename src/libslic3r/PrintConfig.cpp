@@ -1169,6 +1169,17 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0.1));
 
+    def = this->add("wave_overhang_pattern", coEnum);
+    def->label = L("Wave overhang pattern");
+    def->category = L("Layers and Perimeters");
+    def->tooltip = L("Controls whether wave-overhang tracks are printed one direction at a time or connected into a back-and-forth meander.");
+    def->set_enum<InfillPattern>({
+        { "monotonic", L("Monotonic") },
+        { "zigzag",    L("Zig Zag") }
+    });
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionEnum<InfillPattern>(ipZigZag));
+
     def = this->add("wave_overhang_line_spacing", coFloat);
     def->label = L("Wave overhang line spacing");
     def->category = L("Extrusion Width");

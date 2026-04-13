@@ -21,6 +21,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     int             perimeter_count,
     int             additional_shell_count,
     double          wave_perimeter_overlap,
+    bool            wave_zig_zag,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,

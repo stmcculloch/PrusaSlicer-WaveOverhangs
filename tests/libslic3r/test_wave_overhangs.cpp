@@ -13,7 +13,7 @@ TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverh
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, true, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
@@ -32,7 +32,7 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
     };
 
     Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 0.75, flow, scale_(0.01));
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, true, 1.0, 0.75, flow, scale_(0.01));
 
     REQUIRE(! regions.empty());
 
@@ -54,8 +54,8 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
     };
 
     Flow flow(1., 1., 1.);
-    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 1.0, 1.0, flow, scale_(0.01));
-    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.75, 0.5, flow, scale_(0.01));
+    auto [baseline_regions, baseline_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, false, 1.0, 1.0, flow, scale_(0.01));
+    auto [modified_regions, modified_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 2, 0.1, true, 0.75, 0.5, flow, scale_(0.01));
 
     REQUIRE(! baseline_regions.empty());
     REQUIRE(! modified_regions.empty());
@@ -75,4 +75,30 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
 
     CHECK(saw_wave_width_path);
     CHECK(saw_shell_width_path);
+}
+
+TEST_CASE("Wave overhang zig-zag connects adjacent fronts into fewer paths", "[WaveOverhangs]")
+{
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
+    Polygons lower_support = {
+        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
+    };
+
+    Flow flow(1., 1., 1.);
+    auto [monotonic_regions, monotonic_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, false, 1.0, 0.75, flow, scale_(0.01));
+    auto [zigzag_regions, zigzag_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, true, 1.0, 0.75, flow, scale_(0.01));
+
+    REQUIRE(! monotonic_regions.empty());
+    REQUIRE(! zigzag_regions.empty());
+    CHECK(! monotonic_filled.empty());
+    CHECK(! zigzag_filled.empty());
+
+    size_t monotonic_count = 0;
+    for (const ExtrusionPaths &paths : monotonic_regions)
+        monotonic_count += paths.size();
+    size_t zigzag_count = 0;
+    for (const ExtrusionPaths &paths : zigzag_regions)
+        zigzag_count += paths.size();
+
+    CHECK(zigzag_count <= monotonic_count);
 }

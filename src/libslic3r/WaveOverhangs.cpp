@@ -122,6 +122,52 @@ void append_shell_perimeters(ExtrusionPaths &overhang_region,
     }
 }
 
+void append_wave_fronts(ExtrusionPaths &overhang_region,
+                        Polylines      &&fronts,
+                        const Flow     &wave_flow,
+                        coord_t         connector_limit,
+                        bool            zig_zag)
+{
+    if (fronts.empty())
+        return;
+
+    if (! zig_zag) {
+        extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        return;
+    }
+
+    Polylines merged;
+    merged.reserve(fronts.size());
+    for (Polyline &front : fronts) {
+        if (front.points.size() < 2)
+            continue;
+
+        if (merged.empty()) {
+            merged.emplace_back(std::move(front));
+            continue;
+        }
+
+        Polyline &current = merged.back();
+        const double d_keep = (current.last_point() - front.first_point()).cast<double>().norm();
+        const double d_flip = (current.last_point() - front.last_point()).cast<double>().norm();
+        const double best_d = std::min(d_keep, d_flip);
+
+        if (best_d > connector_limit) {
+            merged.emplace_back(std::move(front));
+            continue;
+        }
+
+        if (d_flip < d_keep)
+            front.reverse();
+        if (current.last_point() == front.first_point())
+            current.append(front.points.begin() + 1, front.points.end());
+        else
+            current.append(std::move(front));
+    }
+
+    extrusion_paths_append(overhang_region, merged, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+}
+
 } // namespace
 
 std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
@@ -130,6 +176,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     int             perimeter_count,
     int             additional_shell_count,
     double          wave_perimeter_overlap,
+    bool            wave_zig_zag,
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
@@ -144,6 +191,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
     const coord_t trim_inset         = std::max<coord_t>(std::max<coord_t>(1, wave_flow.scaled_width() / 2), shell_inner_edge + wave_flow.scaled_width() / 2);
     const coord_t filled_area_regularization = std::max<coord_t>(1, base_spacing / 2);
+    const coord_t zig_zag_connector_limit = std::max<coord_t>(wave_spacing, wave_flow.scaled_width()) + perimeter_overlap;
     const double  min_area_growth    = 0.05 * double(wave_spacing) * double(wave_spacing);
 
     BoundingBox infill_area_bb       = get_extents(infill_area).inflated(SCALED_EPSILON);
@@ -210,7 +258,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
                 if (! fronts.empty())
-                    extrusion_paths_append(overhang_region, fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+                    append_wave_fronts(overhang_region, std::move(fronts), wave_flow, zig_zag_connector_limit, wave_zig_zag);
 
                 accumulated_region = std::move(next_region);
                 accumulated_area   = next_area;
