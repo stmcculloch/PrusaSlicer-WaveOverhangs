@@ -101,7 +101,7 @@ TEST_CASE("Get keys", "[Config]"){
 TEST_CASE("Wave overhangs config plumbing", "[Config]") {
     DynamicPrintConfig defaults = DynamicPrintConfig::full_print_config();
     CHECK(defaults.opt_float("wave_overhang_perimeter_overlap") == Approx(0.1));
-    CHECK(defaults.opt_enum<WaveOverhangPattern>("wave_overhang_pattern") == WaveOverhangPattern::ZigZag);
+    CHECK(defaults.opt_enum<WaveOverhangPattern>("wave_overhang_pattern") == WaveOverhangPattern::Smart);
     CHECK(defaults.opt_float("wave_overhang_line_spacing") == Approx(0.35));
     CHECK(defaults.opt_float("wave_overhang_line_width") == Approx(0.4));
 

@@ -1186,7 +1186,7 @@ void PrintConfigDef::init_fff_params()
         { "smart",     L("Smart") }
     });
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionEnum<WaveOverhangPattern>(WaveOverhangPattern::ZigZag));
+    def->set_default_value(new ConfigOptionEnum<WaveOverhangPattern>(WaveOverhangPattern::Smart));
 
     def = this->add("wave_overhang_line_spacing", coFloat);
     def->label = L("Wave overhang line spacing");
