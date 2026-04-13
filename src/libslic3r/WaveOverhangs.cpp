@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdlib>
 #include <functional>
@@ -130,14 +131,15 @@ bool wave_split_debug_enabled()
 
 void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
 {
-    static int iRun = 0;
+    static std::atomic<int> iRun{ 0 };
+    const int run_idx = iRun.fetch_add(1, std::memory_order_relaxed);
     boost::filesystem::create_directories("out");
 
     BoundingBox bbox = get_extents(ExPolygons{ debug_info.wave_cover });
     bbox.offset(scale_(1.));
 
     {
-        SVG svg(debug_out_path("wave-overhang-split-%03d-before.svg", iRun).c_str(), bbox);
+        SVG svg(debug_out_path("wave-overhang-split-%03d-before.svg", run_idx).c_str(), bbox);
         svg.draw(debug_info.wave_cover, "#f4f6f8", 0.45f);
         svg.draw_outline(debug_info.wave_cover, "black", "#444444", scale_(0.03));
         for (const NarrowSplitDebugLevel &level : debug_info.levels) {
@@ -155,7 +157,7 @@ void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
     }
 
     {
-        SVG svg(debug_out_path("wave-overhang-split-%03d-after.svg", iRun).c_str(), bbox);
+        SVG svg(debug_out_path("wave-overhang-split-%03d-after.svg", run_idx).c_str(), bbox);
         svg.draw(debug_info.wave_cover, "#f4f6f8", 0.20f);
         svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
         svg.draw(debug_info.final_slits, "#ff5a5f");
@@ -167,7 +169,7 @@ void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
 
     for (size_t level_idx = 0; level_idx < debug_info.levels.size(); ++level_idx) {
         const NarrowSplitDebugLevel &level = debug_info.levels[level_idx];
-        SVG svg(debug_out_path("wave-overhang-split-%03d-inset-%02d.svg", iRun, int(level_idx)).c_str(), bbox);
+        SVG svg(debug_out_path("wave-overhang-split-%03d-inset-%02d.svg", run_idx, int(level_idx)).c_str(), bbox);
         svg.draw(debug_info.wave_cover, "#f4f6f8", 0.18f);
         svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
         svg.draw(level.inset_components, "#9fd3ff", 0.22f);
@@ -185,7 +187,6 @@ void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
         svg.Close();
     }
 
-    ++iRun;
 }
 
 ClosestBoundaryPair find_closest_boundary_pair(const ExPolygon &a, const ExPolygon &b, const ExPolygon &container)
