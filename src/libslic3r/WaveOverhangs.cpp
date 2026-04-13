@@ -441,19 +441,37 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     fronts.end());
                 fronts = reconnect_polylines(fronts, wave_spacing);
 
+                Polylines rejected_fronts;
+                rejected_fronts.reserve(fronts.size());
                 fronts.erase(
-                    std::remove_if(fronts.begin(), fronts.end(), [min_front_length](const Polyline &front) {
-                        return front.length() < min_front_length;
+                    std::remove_if(fronts.begin(), fronts.end(), [&rejected_fronts, min_front_length](const Polyline &front) {
+                        if (front.length() < min_front_length) {
+                            rejected_fronts.push_back(front);
+                            return true;
+                        }
+                        return false;
                     }),
                     fronts.end());
                 if (fronts.empty())
                     break;
 
-                next_region = intersection(
-                    offset(fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound),
-                    next_region);
-                if (next_region.empty())
-                    break;
+                if (! rejected_fronts.empty()) {
+                    Polygons blocked_region = offset(rejected_fronts, float(wave_spacing), jtRound, 0., ClipperLib::etOpenRound);
+                    Polygons filtered_region = diff(next_region, blocked_region);
+                    if (filtered_region.empty())
+                        break;
+
+                    Polygons reachable_region;
+                    for (const ExPolygon &component : union_ex(to_expolygons(filtered_region))) {
+                        Polygons component_polygons = to_polygons(component);
+                        if (! intersection(component_polygons, accumulated_region).empty())
+                            append(reachable_region, component_polygons);
+                    }
+
+                    next_region = std::move(reachable_region);
+                    if (next_region.empty())
+                        break;
+                }
 
                 double next_area = area(next_region);
                 if (next_area <= accumulated_area + min_area_growth)
