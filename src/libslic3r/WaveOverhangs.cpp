@@ -732,14 +732,14 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                 export_narrow_split_debug_svg(split_debug);
             }
 
+            const Polygons &full_seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : to_polygons(wave_cover);
+            const ExPolygon &full_seed_boundary = additional_shell_count > 0 ? overhang : wave_cover;
+            const Polygons full_anchoring = intersection(expand(full_seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
+            const Polylines base_seeds = generate_wave_overhang_seeds(full_seed_boundary, full_anchoring, seed_expansion);
+
             for (const ExPolygon &split_wave_cover : split_wave_covers) {
                 Polygons wave_cover_polygons = to_polygons(split_wave_cover);
-                const Polygons &seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : wave_cover_polygons;
-                const ExPolygon &seed_boundary      = additional_shell_count > 0 ? overhang : wave_cover;
-                Polygons anchoring = intersection(expand(seed_cover_polygons, 1.1 * base_spacing, jtRound, 0.), inset_anchors);
-                Polylines seeds    = generate_wave_overhang_seeds(seed_boundary, anchoring, seed_expansion);
-                if (! seeds.empty())
-                    seeds = intersection_pl(seeds, wave_cover_polygons);
+                Polylines seeds = base_seeds.empty() ? Polylines{} : intersection_pl(base_seeds, wave_cover_polygons);
                 if (seeds.empty())
                     continue;
 
