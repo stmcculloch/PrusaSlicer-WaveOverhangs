@@ -370,7 +370,6 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig* config)
     bool have_raft = config->opt_int("raft_layers") > 0;
     bool have_support_material = config->opt_bool("support_material") || have_raft;
     bool have_support_material_auto = have_support_material && config->opt_bool("support_material_auto");
-    bool have_wave_overhangs = config->opt_int("perimeters") > 0 && config->opt_bool("wave_overhangs");
     bool have_support_interface = config->opt_int("support_material_interface_layers") > 0;
     bool have_support_soluble = have_support_material && config->opt_float("support_material_contact_distance") == 0;
     auto support_material_style = config->opt_enum<SupportMaterialStyle>("support_material_style");
