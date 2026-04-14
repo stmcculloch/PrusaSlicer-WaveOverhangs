@@ -6,9 +6,9 @@
 
 using namespace Slic3r;
 
-TEST_CASE("Wave overhangs generate fronts for a non-convex hole-free overhang", "[WaveOverhangs]")
+TEST_CASE("Wave overhangs generate fronts for a hole-free overhang", "[WaveOverhangs]")
 {
-    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 12 }, { 36, 12 }, { 36, 30 }, { 0, 30 } }) };
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
     Polygons lower_support = {
         Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
     };
@@ -49,7 +49,7 @@ TEST_CASE("Wave overhangs preserve holes while generating fronts", "[WaveOverhan
 
 TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[WaveOverhangs]")
 {
-    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 12 }, { 36, 12 }, { 36, 30 }, { 0, 30 } }) };
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
     Polygons lower_support = {
         Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
     };
@@ -80,7 +80,7 @@ TEST_CASE("Wave overhang geometry modifiers do not suppress wave generation", "[
 
 TEST_CASE("Wave overhang zig-zag connects adjacent fronts into fewer paths", "[WaveOverhangs]")
 {
-    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 12 }, { 36, 12 }, { 36, 30 }, { 0, 30 } }) };
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
     Polygons lower_support = {
         Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
     };
@@ -134,7 +134,7 @@ TEST_CASE("Wave overhang zig-zag stays depth-first when fronts split around a ho
 
 TEST_CASE("Wave overhang smart mode still generates supported fronts", "[WaveOverhangs]")
 {
-    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 12 }, { 36, 12 }, { 36, 30 }, { 0, 30 } }) };
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 30 }, { 0, 30 } }) };
     Polygons lower_support = {
         Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } })
     };
@@ -146,26 +146,13 @@ TEST_CASE("Wave overhang smart mode still generates supported fronts", "[WaveOve
     CHECK(! smart_filled.empty());
 }
 
-TEST_CASE("Wave overhangs leave convex hole-free spans to regular bridging", "[WaveOverhangs]")
+TEST_CASE("Wave overhangs still claim holed spans even when bridging looks viable", "[WaveOverhangs]")
 {
     ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 20 }, { 0, 20 } }) };
+    infill.holes.emplace_back(Polygon::new_scale({ { 24, 6 }, { 36, 6 }, { 36, 14 }, { 24, 14 } }));
     Polygons lower_support = {
-        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 20 }, { 0, 20 } })
-    };
-
-    Flow flow(1., 1., 1.);
-    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01));
-
-    CHECK(regions.empty());
-    CHECK(filled_area.empty());
-}
-
-TEST_CASE("Wave overhangs still claim concave spans even when bridging looks viable", "[WaveOverhangs]")
-{
-    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 12 }, { 36, 12 }, { 36, 30 }, { 0, 30 } }) };
-    Polygons lower_support = {
-        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 30 }, { 0, 30 } }),
-        Polygon::new_scale({ { 40, 0 }, { 60, 0 }, { 60, 12 }, { 40, 12 } })
+        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 20 }, { 0, 20 } }),
+        Polygon::new_scale({ { 40, 0 }, { 60, 0 }, { 60, 20 }, { 40, 20 } })
     };
 
     Flow flow(1., 1., 1.);

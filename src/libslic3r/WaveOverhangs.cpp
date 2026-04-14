@@ -310,7 +310,7 @@ bool should_generate_waves_for_region(const Polygons &overhang_to_cover,
     if (real_overhang.empty())
         return false;
 
-    if (! overhang_region.holes.empty() || ! polygon_is_convex(overhang_region.contour))
+    if (! overhang_region.holes.empty())
         return true;
 
     const Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * overhang_flow.scaled_spacing(), jtRound, 0.), inset_anchors);
