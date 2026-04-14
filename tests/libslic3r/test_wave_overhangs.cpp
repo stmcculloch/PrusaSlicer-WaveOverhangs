@@ -145,3 +145,18 @@ TEST_CASE("Wave overhang smart mode still generates supported fronts", "[WaveOve
     REQUIRE(! smart_regions.empty());
     CHECK(! smart_filled.empty());
 }
+
+TEST_CASE("Wave overhangs leave bridgeable spans to regular bridging", "[WaveOverhangs]")
+{
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 20 }, { 0, 20 } }) };
+    Polygons lower_support = {
+        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 20 }, { 0, 20 } }),
+        Polygon::new_scale({ { 40, 0 }, { 60, 0 }, { 60, 20 }, { 40, 20 } })
+    };
+
+    Flow flow(1., 1., 1.);
+    auto [regions, filled_area] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01));
+
+    CHECK(regions.empty());
+    CHECK(filled_area.empty());
+}
