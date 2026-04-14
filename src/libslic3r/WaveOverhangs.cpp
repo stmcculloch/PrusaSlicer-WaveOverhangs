@@ -6,15 +6,11 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <cmath>
-#include <cstdlib>
 #include <functional>
 #include <limits>
 #include <unordered_map>
 #include <utility>
-
-#include <boost/filesystem/operations.hpp>
 
 #include "Algorithm/RegionExpansion.hpp"
 #include "BoundingBox.hpp"
@@ -22,8 +18,6 @@
 #include "ExtrusionEntity.hpp"
 #include "Line.hpp"
 #include "Polyline.hpp"
-#include "SVG.hpp"
-#include "Utils.hpp"
 #include "libslic3r.h"
 
 namespace Slic3r::WaveOverhangs {
@@ -106,111 +100,6 @@ struct NarrowSplitCandidate {
     double  distance_sq{ std::numeric_limits<double>::infinity() };
     Polygon slit;
 };
-
-struct NarrowSplitDebugLevel {
-    coord_t                         inset_depth{ 0 };
-    ExPolygons                      inset_components;
-    std::vector<ClosestBoundaryPair> closest_pairs;
-    Polygons                        candidate_slits;
-};
-
-struct NarrowSplitDebugInfo {
-    ExPolygon                       wave_cover;
-    coord_t                         wave_spacing{ 0 };
-    double                          threshold{ 0. };
-    std::vector<NarrowSplitDebugLevel> levels;
-    Polygons                        final_slits;
-    ExPolygons                      split_wave_covers;
-};
-
-bool wave_split_debug_enabled()
-{
-    static const bool enabled = std::getenv("SLIC3R_WAVE_SPLIT_DEBUG") != nullptr;
-    return enabled;
-}
-
-void export_wave_propagation_debug_svg(const ExPolygon &boundary, const Polylines &seeds, const std::vector<Polylines> &front_levels)
-{
-    static std::atomic<int> iRun{ 0 };
-    const int run_idx = iRun.fetch_add(1, std::memory_order_relaxed);
-    boost::filesystem::create_directories("out");
-
-    BoundingBox bbox = get_extents(ExPolygons{ boundary });
-    bbox.offset(scale_(1.));
-
-    SVG svg(debug_out_path("wave-overhang-propagation-%03d.svg", run_idx).c_str(), bbox);
-    svg.draw(boundary, "#f4f6f8", 0.18f);
-    svg.draw_outline(boundary, "black", "#444444", scale_(0.03));
-    svg.draw(seeds, "#dc2626", scale_(0.08));
-
-    const std::array<const char*, 6> colors{{ "#2563eb", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16" }};
-    for (size_t level_idx = 0; level_idx < front_levels.size(); ++level_idx) {
-        const char *color = colors[level_idx % colors.size()];
-        svg.draw(front_levels[level_idx], color, scale_(0.05));
-    }
-
-    svg.Close();
-}
-
-void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
-{
-    static std::atomic<int> iRun{ 0 };
-    const int run_idx = iRun.fetch_add(1, std::memory_order_relaxed);
-    boost::filesystem::create_directories("out");
-
-    BoundingBox bbox = get_extents(ExPolygons{ debug_info.wave_cover });
-    bbox.offset(scale_(1.));
-
-    {
-        SVG svg(debug_out_path("wave-overhang-split-%03d-before.svg", run_idx).c_str(), bbox);
-        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.45f);
-        svg.draw_outline(debug_info.wave_cover, "black", "#444444", scale_(0.03));
-        for (const NarrowSplitDebugLevel &level : debug_info.levels) {
-            svg.draw(level.inset_components, "#9fd3ff", 0.12f);
-            svg.draw_outline(level.inset_components, "#2c7fb8", "#2c7fb8", scale_(0.025));
-            for (const ClosestBoundaryPair &pair : level.closest_pairs) {
-                if (pair.valid)
-                    svg.draw(Line(pair.a, pair.b), "#ff9500", scale_(0.06));
-            }
-            svg.draw(level.candidate_slits, "#ff5a5f");
-            svg.draw_outline(level.candidate_slits, "#c62828", scale_(0.02));
-        }
-        svg.draw_text(bbox.min + Point(scale_(0.5), scale_(0.5)), string_printf("spacing=%.3f threshold=%.2f", unscale<double>(debug_info.wave_spacing), debug_info.threshold).c_str(), "black", 14.f);
-        svg.Close();
-    }
-
-    {
-        SVG svg(debug_out_path("wave-overhang-split-%03d-after.svg", run_idx).c_str(), bbox);
-        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.20f);
-        svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
-        svg.draw(debug_info.final_slits, "#ff5a5f");
-        svg.draw_outline(debug_info.final_slits, "#c62828", scale_(0.02));
-        svg.draw(debug_info.split_wave_covers, "#a7f3d0", 0.45f);
-        svg.draw_outline(debug_info.split_wave_covers, "#047857", "#047857", scale_(0.03));
-        svg.Close();
-    }
-
-    for (size_t level_idx = 0; level_idx < debug_info.levels.size(); ++level_idx) {
-        const NarrowSplitDebugLevel &level = debug_info.levels[level_idx];
-        SVG svg(debug_out_path("wave-overhang-split-%03d-inset-%02d.svg", run_idx, int(level_idx)).c_str(), bbox);
-        svg.draw(debug_info.wave_cover, "#f4f6f8", 0.18f);
-        svg.draw_outline(debug_info.wave_cover, "#999999", "#999999", scale_(0.025));
-        svg.draw(level.inset_components, "#9fd3ff", 0.22f);
-        svg.draw_outline(level.inset_components, "#2c7fb8", "#2c7fb8", scale_(0.03));
-        for (const ClosestBoundaryPair &pair : level.closest_pairs) {
-            if (pair.valid) {
-                svg.draw(Line(pair.a, pair.b), "#ff9500", scale_(0.07));
-                svg.draw(pair.a, "#ef4444", scale_(0.08));
-                svg.draw(pair.b, "#ef4444", scale_(0.08));
-            }
-        }
-        svg.draw(level.candidate_slits, "#ff5a5f");
-        svg.draw_outline(level.candidate_slits, "#c62828", scale_(0.02));
-        svg.draw_text(bbox.min + Point(scale_(0.5), scale_(0.5)), string_printf("inset=%.3f", unscale<double>(level.inset_depth)).c_str(), "black", 14.f);
-        svg.Close();
-    }
-
-}
 
 ClosestBoundaryPair find_closest_boundary_pair(const ExPolygon &a, const ExPolygon &b, const ExPolygon &container)
 {
@@ -299,7 +188,7 @@ Polygon make_effective_split_slit(const ExPolygon &wave_cover, const Point &a, c
     return {};
 }
 
-Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold, NarrowSplitDebugInfo *debug_info = nullptr)
+Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold)
 {
     const double threshold = std::max(0.0, narrow_split_threshold);
     if (threshold <= 0.)
@@ -313,9 +202,7 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
     const size_t original_hole_count = wave_cover.holes.size();
 
     std::vector<NarrowSplitCandidate> candidates;
-    auto append_candidate = [&](const ClosestBoundaryPair &pair, NarrowSplitDebugLevel *debug_level) {
-        if (debug_level != nullptr && pair.valid)
-            debug_level->closest_pairs.push_back(pair);
+    auto append_candidate = [&](const ClosestBoundaryPair &pair) {
         if (! pair.valid || pair.distance_sq > max_gap_sq)
             return;
 
@@ -328,21 +215,12 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
         if (! candidate.slit.is_valid())
             return;
 
-        if (debug_level != nullptr)
-            debug_level->candidate_slits.push_back(candidate.slit);
         candidates.push_back(std::move(candidate));
     };
 
     for (double inset_fraction : inset_fractions) {
         const coord_t inset_depth = std::max<coord_t>(1, coord_t(std::round(inset_fraction * double(wave_spacing))));
         const ExPolygons inset_components = offset_ex(wave_cover, -float(inset_depth), jtRound, 0.);
-        NarrowSplitDebugLevel *debug_level = nullptr;
-        if (debug_info != nullptr) {
-            debug_info->levels.emplace_back();
-            debug_level = &debug_info->levels.back();
-            debug_level->inset_depth = inset_depth;
-            debug_level->inset_components = inset_components;
-        }
         const bool component_count_changed = inset_components.size() > 1;
         const bool hole_count_changed = total_hole_count(inset_components) != original_hole_count;
         if (! component_count_changed && ! hole_count_changed)
@@ -352,7 +230,7 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
             for (size_t i = 0; i < inset_components.size(); ++i) {
                 for (size_t j = i + 1; j < inset_components.size(); ++j) {
                     ClosestBoundaryPair pair = find_closest_boundary_pair(inset_components[i], inset_components[j], wave_cover);
-                    append_candidate(pair, debug_level);
+                    append_candidate(pair);
                 }
             }
         }
@@ -364,12 +242,12 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
             for (size_t hole_idx = 0; hole_idx < wave_cover.holes.size(); ++hole_idx) {
                 ExPolygon hole_boundary;
                 hole_boundary.contour = wave_cover.holes[hole_idx];
-                append_candidate(find_closest_boundary_pair(outer_boundary, hole_boundary, wave_cover), debug_level);
+                append_candidate(find_closest_boundary_pair(outer_boundary, hole_boundary, wave_cover));
 
                 for (size_t other_hole_idx = hole_idx + 1; other_hole_idx < wave_cover.holes.size(); ++other_hole_idx) {
                     ExPolygon other_hole_boundary;
                     other_hole_boundary.contour = wave_cover.holes[other_hole_idx];
-                    append_candidate(find_closest_boundary_pair(hole_boundary, other_hole_boundary, wave_cover), debug_level);
+                    append_candidate(find_closest_boundary_pair(hole_boundary, other_hole_boundary, wave_cover));
                 }
             }
         }
@@ -400,10 +278,7 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
         slits.push_back(std::move(candidate.slit));
     }
 
-    Polygons result = slits.empty() ? Polygons{} : union_(slits);
-    if (debug_info != nullptr)
-        debug_info->final_slits = result;
-    return result;
+    return slits.empty() ? Polygons{} : union_(slits);
 }
 
 Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons &anchoring, const coord_t seed_expansion)
@@ -739,21 +614,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
             ExPolygons split_wave_covers = { wave_cover };
-            NarrowSplitDebugInfo split_debug;
-            NarrowSplitDebugInfo *split_debug_ptr = nullptr;
-            if (wave_split_debug_enabled()) {
-                split_debug_ptr = &split_debug;
-                split_debug.wave_cover = wave_cover;
-                split_debug.wave_spacing = wave_spacing;
-                split_debug.threshold = wave_narrow_split_threshold;
-            }
-
-            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold, split_debug_ptr); ! split_slits.empty())
+            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold); ! split_slits.empty())
                 split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
-            if (split_debug_ptr != nullptr) {
-                split_debug.split_wave_covers = split_wave_covers;
-                export_narrow_split_debug_svg(split_debug);
-            }
 
             const Polygons &full_seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : to_polygons(wave_cover);
             const ExPolygon &full_seed_boundary = additional_shell_count > 0 ? overhang : wave_cover;
@@ -802,9 +664,6 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     accumulated_region = std::move(next_region);
                     accumulated_area   = next_area;
                 }
-
-                if (wave_split_debug_enabled() && (! seeds.empty() || ! front_levels.empty()))
-                    export_wave_propagation_debug_svg(split_wave_cover, seeds, front_levels);
 
                 if (! front_levels.empty()) {
                     ExtrusionPaths split_region_paths;
