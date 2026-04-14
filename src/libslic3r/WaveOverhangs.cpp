@@ -301,6 +301,7 @@ Polylines generate_wave_overhang_seeds(const ExPolygon &boundary, const Polygons
 }
 
 bool should_generate_waves_for_region(const Polygons &overhang_to_cover,
+                                      const ExPolygon &overhang_region,
                                       const Polygons &real_overhang,
                                       const Polygons &anchors,
                                       const Polygons &inset_anchors,
@@ -308,6 +309,9 @@ bool should_generate_waves_for_region(const Polygons &overhang_to_cover,
 {
     if (real_overhang.empty())
         return false;
+
+    if (! overhang_region.holes.empty() || ! polygon_is_convex(overhang_region.contour))
+        return true;
 
     const Polygons anchoring = intersection(expand(overhang_to_cover, 1.1 * overhang_flow.scaled_spacing(), jtRound, 0.), inset_anchors);
     const Polygon  anchoring_convex_hull = Geometry::convex_hull(anchoring);
@@ -630,7 +634,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         Polygons real_overhang     = intersection(wave_cover_area, overhangs);
         if (real_overhang.empty())
             wave_cover_area.clear();
-        else if (! should_generate_waves_for_region(wave_cover_area, real_overhang, anchors, inset_anchors, overhang_flow))
+        else if (! should_generate_waves_for_region(wave_cover_area, overhang, real_overhang, anchors, inset_anchors, overhang_flow))
             wave_cover_area.clear();
 
         ExtrusionPaths &overhang_region = wave_paths.emplace_back();
