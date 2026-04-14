@@ -682,9 +682,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                             filled_overhang_region,
                             additional_shell_count > 0 ?
                                 intersection(
-                                    expand(wave_cover_polygons, std::max<coord_t>(0, shell_inner_edge - perimeter_overlap), jtRound, 0.),
+                                    expand(accumulated_region, std::max<coord_t>(0, shell_inner_edge - perimeter_overlap), jtRound, 0.),
                                     overhang_to_cover) :
-                                wave_cover_polygons);
+                                accumulated_region);
                     }
                 }
             }
