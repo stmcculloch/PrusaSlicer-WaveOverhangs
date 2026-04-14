@@ -1143,6 +1143,14 @@ struct SlicesMarginCache
     Polygons    all_polygons;
 };
 
+static inline Polygons collect_wave_overhang_filled_areas(const Layer &layer)
+{
+    Polygons wave_filled_areas;
+    for (const LayerRegion *layerm : layer.regions())
+        append(wave_filled_areas, layerm->wave_overhang_filled_area());
+    return wave_filled_areas.empty() ? Polygons{} : union_(wave_filled_areas);
+}
+
 // Tuple: overhang_polygons, contact_polygons, enforcer_polygons, no_interface_offset
 // no_interface_offset: minimum of external perimeter widths
 static inline std::tuple<Polygons, Polygons, Polygons, float> detect_overhangs(
@@ -1165,6 +1173,9 @@ static inline std::tuple<Polygons, Polygons, Polygons, float> detect_overhangs(
     Polygons contact_polygons;
     // Enforcers projected to overhangs, trimmed
     Polygons enforcer_polygons;
+    const Polygons wave_filled_areas = object_config.support_remaining_areas_after_wave_overhangs.value ?
+        collect_wave_overhang_filled_areas(layer) :
+        Polygons{};
 
     const bool   support_auto    = object_config.support_material.value && object_config.support_material_auto.value;
     const bool   buildplate_only = ! annotations.buildplate_covered.empty();
@@ -1306,6 +1317,9 @@ static inline std::tuple<Polygons, Polygons, Polygons, float> detect_overhangs(
             if (object_config.dont_support_bridges)
                 //FIXME Expensive, potentially not precise enough. Misses gap fill extrusions, which bridge.
                 remove_bridges_from_contacts(print_config, lower_layer, *layerm, fw, diff_polygons);
+
+            if (! wave_filled_areas.empty())
+                diff_polygons = diff(diff_polygons, wave_filled_areas);
 
             if (diff_polygons.empty())
                 continue;

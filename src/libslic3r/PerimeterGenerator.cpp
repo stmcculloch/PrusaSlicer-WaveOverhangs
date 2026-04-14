@@ -1131,7 +1131,9 @@ void PerimeterGenerator::process_arachne(
     // Gaps without the thin walls
     ExtrusionEntityCollection  & /* out_gap_fill */,
     // Infills without the gap fills
-    ExPolygons                 &out_fill_expolygons)
+    ExPolygons                 &out_fill_expolygons,
+    // Areas successfully filled by wave-overhang propagation.
+    Polygons                   &out_wave_overhang_filled_area)
 {
     // other perimeters
     coord_t perimeter_width        = params.perimeter_flow.scaled_width();
@@ -1305,6 +1307,8 @@ void PerimeterGenerator::process_arachne(
                                                                            params.object_config, params.print_config,
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
+            if (params.config.wave_overhangs && ! filled_area.empty())
+                append(out_wave_overhang_filled_area, filled_area);
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);
@@ -1334,7 +1338,9 @@ void PerimeterGenerator::process_classic(
     // Gaps without the thin walls
     ExtrusionEntityCollection  &out_gap_fill,
     // Infills without the gap fills
-    ExPolygons                 &out_fill_expolygons)
+    ExPolygons                 &out_fill_expolygons,
+    // Areas successfully filled by wave-overhang propagation.
+    Polygons                   &out_wave_overhang_filled_area)
 {
     // other perimeters
     coord_t perimeter_width         = params.perimeter_flow.scaled_width();
@@ -1686,6 +1692,8 @@ void PerimeterGenerator::process_classic(
                                                                            params.object_config, params.print_config,
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
+            if (params.config.wave_overhangs && ! filled_area.empty())
+                append(out_wave_overhang_filled_area, filled_area);
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);

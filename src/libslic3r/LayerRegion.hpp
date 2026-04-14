@@ -103,6 +103,7 @@ public:
 
     // collection of polylines representing the unsupported bridge edges
     [[nodiscard]] const Polylines&                  unsupported_bridge_edges() const { return m_unsupported_bridge_edges; }
+    [[nodiscard]] const Polygons&                   wave_overhang_filled_area() const { return m_wave_overhang_filled_area; }
 
     // ordered collection of extrusion paths/loops to build all perimeters
     // (this collection contains only ExtrusionEntityCollection objects)
@@ -198,6 +199,7 @@ private:
 
     // collection of polylines representing the unsupported bridge edges
     Polylines                   m_unsupported_bridge_edges;
+    Polygons                    m_wave_overhang_filled_area;
 
     // ordered collection of extrusion paths/loops to build all perimeters
     // (this collection contains only ExtrusionEntityCollection objects)

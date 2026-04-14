@@ -3377,6 +3377,13 @@ void PrintConfigDef::init_fff_params()
     def->mode = comSimple;
     def->set_default_value(new ConfigOptionBool(false));
 
+    def = this->add("support_remaining_areas_after_wave_overhangs", coBool);
+    def->label = L("Support unfilled wave overhang areas");
+    def->category = L("Support material");
+    def->tooltip = L("When wave overhangs are enabled, generate supports only for overhang areas that were not filled by propagated wave toolpaths. Explicit support enforcers still apply normally.");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionBool(true));
+
     def = this->add("support_material_contact_distance", coFloat);
     def->label = L("Top contact Z distance");
     def->category = L("Support material");

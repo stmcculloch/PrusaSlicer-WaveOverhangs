@@ -116,7 +116,9 @@ void process_classic(
     // Gaps without the thin walls
     ExtrusionEntityCollection  &out_gap_fill,
     // Infills without the gap fills
-    ExPolygons                 &out_fill_expolygons);
+    ExPolygons                 &out_fill_expolygons,
+    // Areas successfully filled by wave-overhang propagation.
+    Polygons                   &out_wave_overhang_filled_area);
 
 void process_arachne(
     // Inputs:
@@ -132,7 +134,9 @@ void process_arachne(
     // Gaps without the thin walls
     ExtrusionEntityCollection  &out_gap_fill,
     // Infills without the gap fills
-    ExPolygons                 &out_fill_expolygons);
+    ExPolygons                 &out_fill_expolygons,
+    // Areas successfully filled by wave-overhang propagation.
+    Polygons                   &out_wave_overhang_filled_area);
 
 ExtrusionMultiPath thick_polyline_to_multi_path(const ThickPolyline &thick_polyline, ExtrusionRole role, const Flow &flow, float tolerance, float merge_tolerance, const std::optional<uint32_t> &perimeter_index = std::nullopt);
 

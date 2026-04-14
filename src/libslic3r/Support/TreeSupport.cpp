@@ -237,6 +237,12 @@ static std::vector<std::pair<TreeSupportSettings, std::vector<size_t>>> group_me
     double                   tan_threshold          = support_threshold_auto ? 0. : tan(M_PI * double(support_threshold + 1) / 180.);
     //FIXME this is a fudge constant!
     auto                     enforcer_overhang_offset = scaled<double>(config.support_tree_tip_diameter.value);
+    auto                     collect_wave_overhang_filled_areas = [](const Layer &layer) {
+        Polygons wave_filled_areas;
+        for (const LayerRegion *layerm : layer.regions())
+            append(wave_filled_areas, layerm->wave_overhang_filled_area());
+        return wave_filled_areas.empty() ? Polygons{} : union_(wave_filled_areas);
+    };
 
     size_t num_overhang_layers = support_auto ? num_object_layers : std::min(num_object_layers, std::max(size_t(support_enforce_layers), enforcers_layers.size()));
     tbb::parallel_for(tbb::blocked_range<LayerIndex>(1, num_overhang_layers),
@@ -278,6 +284,10 @@ static std::vector<std::pair<TreeSupportSettings, std::vector<size_t>>> group_me
                     for (const LayerRegion *layerm : current_layer.regions())
                         remove_bridges_from_contacts(print_config, lower_layer, *layerm, 
                             float(layerm->flow(frExternalPerimeter).scaled_width()), overhangs);
+                }
+                if (config.support_remaining_areas_after_wave_overhangs.value) {
+                    if (Polygons wave_filled_areas = collect_wave_overhang_filled_areas(current_layer); ! wave_filled_areas.empty())
+                        overhangs = diff(overhangs, wave_filled_areas);
                 }
             }
             //check_self_intersections(overhangs, "generate_overhangs1");

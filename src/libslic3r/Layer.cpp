@@ -696,6 +696,7 @@ void Layer::make_perimeters()
         layerm.m_fill_expolygons_bboxes.clear();
         layerm.m_fill_expolygons_composite.clear();
         layerm.m_fill_expolygons_composite_bboxes.clear();
+        layerm.m_wave_overhang_filled_area.clear();
     };
 
     // Remove layer islands, remove references to perimeters and fills from these layer islands to LayerRegion ExtrusionEntities.
