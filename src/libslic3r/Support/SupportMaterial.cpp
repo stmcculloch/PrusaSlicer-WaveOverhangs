@@ -1151,6 +1151,13 @@ static inline Polygons collect_wave_overhang_filled_areas(const Layer &layer)
     return wave_filled_areas.empty() ? Polygons{} : union_(wave_filled_areas);
 }
 
+static inline void remove_tiny_support_areas(Polygons &polygons, double min_area)
+{
+    if (polygons.empty() || min_area <= 0.)
+        return;
+    remove_small(polygons, min_area);
+}
+
 // Tuple: overhang_polygons, contact_polygons, enforcer_polygons, no_interface_offset
 // no_interface_offset: minimum of external perimeter widths
 static inline std::tuple<Polygons, Polygons, Polygons, float> detect_overhangs(
@@ -1321,6 +1328,7 @@ static inline std::tuple<Polygons, Polygons, Polygons, float> detect_overhangs(
             if (! wave_filled_areas.empty())
                 diff_polygons = diff(diff_polygons, wave_filled_areas);
 
+            remove_tiny_support_areas(diff_polygons, sqr(double(fw)));
             if (diff_polygons.empty())
                 continue;
 
@@ -1914,6 +1922,7 @@ static inline std::pair<Polygons, Polygons> project_support_to_grid(const Layer 
 
     remove_sticks(overhangs_projection);
     remove_degenerate(overhangs_projection);
+    remove_tiny_support_areas(overhangs_projection, 2.0 * sqr(scaled<double>(grid_params.extrusion_width)));
 
 #ifdef SLIC3R_DEBUG
     SVG::export_expolygons(debug_out_path("support-support-areas-%s-raw-cleaned-%d-%lf.svg", debug_name, iRun, layer.print_z),
@@ -1970,6 +1979,8 @@ static inline std::pair<Polygons, Polygons> project_support_to_grid(const Layer 
         });
 
     task_group_inner.wait();
+    remove_tiny_support_areas(out.first, 2.0 * sqr(scaled<double>(grid_params.extrusion_width)));
+    remove_tiny_support_areas(out.second, 2.0 * sqr(scaled<double>(grid_params.extrusion_width)));
     return out;
 }
 

@@ -1034,10 +1034,11 @@ static Polygons support_mask_from_wave_filled_area(const Polygons &filled_area, 
         shell_width  = coord_t(0.5f * params.ext_perimeter_flow.scaled_width() + params.ext_perimeter_flow.scaled_spacing());
         shell_width += params.perimeter_flow.scaled_spacing() * (desired_total_perimeters - 1);
     }
+    const coord_t support_margin = std::max<coord_t>(1, params.ext_perimeter_flow.scaled_spacing() / 2);
 
-    Polygons supported_area = shell_width > 0 ?
-        intersection(expand(filled_area, float(shell_width), jtRound, 0.), to_polygons(surface)) :
-        intersection(filled_area, to_polygons(surface));
+    Polygons supported_area = intersection(
+        expand(filled_area, float(shell_width + support_margin), jtRound, 0.),
+        to_polygons(surface));
 
     Polygons supported_area_no_holes;
     ExPolygons supported_expolygons = union_ex(supported_area);
