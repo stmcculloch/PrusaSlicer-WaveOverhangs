@@ -129,6 +129,29 @@ bool wave_split_debug_enabled()
     return enabled;
 }
 
+void export_wave_propagation_debug_svg(const ExPolygon &boundary, const Polylines &seeds, const std::vector<Polylines> &front_levels)
+{
+    static std::atomic<int> iRun{ 0 };
+    const int run_idx = iRun.fetch_add(1, std::memory_order_relaxed);
+    boost::filesystem::create_directories("out");
+
+    BoundingBox bbox = get_extents(ExPolygons{ boundary });
+    bbox.offset(scale_(1.));
+
+    SVG svg(debug_out_path("wave-overhang-propagation-%03d.svg", run_idx).c_str(), bbox);
+    svg.draw(boundary, "#f4f6f8", 0.18f);
+    svg.draw_outline(boundary, "black", "#444444", scale_(0.03));
+    svg.draw(seeds, "#dc2626", scale_(0.08));
+
+    const std::array<const char*, 6> colors{{ "#2563eb", "#0ea5e9", "#06b6d4", "#14b8a6", "#22c55e", "#84cc16" }};
+    for (size_t level_idx = 0; level_idx < front_levels.size(); ++level_idx) {
+        const char *color = colors[level_idx % colors.size()];
+        svg.draw(front_levels[level_idx], color, scale_(0.05));
+    }
+
+    svg.Close();
+}
+
 void export_narrow_split_debug_svg(const NarrowSplitDebugInfo &debug_info)
 {
     static std::atomic<int> iRun{ 0 };
@@ -262,9 +285,9 @@ bool slit_changes_topology(const ExPolygon &wave_cover, const Polygon &slit)
     return split_result.size() != 1 || total_hole_count(split_result) != wave_cover.holes.size();
 }
 
-Polygon make_effective_split_slit(const ExPolygon &wave_cover, const Point &a, const Point &b, coord_t extension, coord_t initial_half_width)
+Polygon make_effective_split_slit(const ExPolygon &wave_cover, const Point &a, const Point &b, coord_t extension, coord_t initial_half_width, coord_t wave_spacing)
 {
-    coord_t half_width = std::max<coord_t>(1, initial_half_width);
+    coord_t half_width = std::max<coord_t>(std::max<coord_t>(1, initial_half_width), wave_spacing / 2 + 1);
     for (int attempt = 0; attempt < 6; ++attempt) {
         Polygon slit = make_split_slit(a, b, extension, half_width);
         if (slit_changes_topology(wave_cover, slit))
@@ -301,7 +324,7 @@ Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_s
         candidate.b = pair.b;
         candidate.distance_sq = pair.distance_sq;
         candidate.midpoint = (0.5 * (pair.a.cast<double>() + pair.b.cast<double>())).cast<coord_t>();
-        candidate.slit = make_effective_split_slit(wave_cover, pair.a, pair.b, wave_spacing + slit_extension, slit_half_width);
+        candidate.slit = make_effective_split_slit(wave_cover, pair.a, pair.b, wave_spacing + slit_extension, slit_half_width, wave_spacing);
         if (! candidate.slit.is_valid())
             return;
 
@@ -779,6 +802,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
                     accumulated_region = std::move(next_region);
                     accumulated_area   = next_area;
                 }
+
+                if (wave_split_debug_enabled() && (! seeds.empty() || ! front_levels.empty()))
+                    export_wave_propagation_debug_svg(split_wave_cover, seeds, front_levels);
 
                 if (! front_levels.empty()) {
                     ExtrusionPaths split_region_paths;
