@@ -1024,6 +1024,30 @@ static ExPolygons expand_wave_target_area(const ExPolygons &infill_areas, int pe
     return offset_ex(infill_areas, float(reclaimed_perimeters * perimeter_spacing));
 }
 
+static Polygons support_mask_from_wave_filled_area(const Polygons &filled_area, const Surface &surface, const PerimeterGenerator::Parameters &params, int desired_total_perimeters)
+{
+    if (filled_area.empty())
+        return {};
+
+    coord_t shell_width = 0;
+    if (desired_total_perimeters > 0) {
+        shell_width  = coord_t(0.5f * params.ext_perimeter_flow.scaled_width() + params.ext_perimeter_flow.scaled_spacing());
+        shell_width += params.perimeter_flow.scaled_spacing() * (desired_total_perimeters - 1);
+    }
+
+    Polygons supported_area = shell_width > 0 ?
+        intersection(expand(filled_area, float(shell_width), jtRound, 0.), to_polygons(surface)) :
+        intersection(filled_area, to_polygons(surface));
+
+    Polygons supported_area_no_holes;
+    ExPolygons supported_expolygons = union_ex(supported_area);
+    supported_area_no_holes.reserve(supported_expolygons.size());
+    for (const ExPolygon &expolygon : supported_expolygons)
+        supported_area_no_holes.push_back(expolygon.contour);
+
+    return supported_area_no_holes;
+}
+
 static bool should_replace_with_wave_path(const ExtrusionPath &path, uint16_t desired_total_perimeters)
 {
     return path.role().is_perimeter() &&
@@ -1308,7 +1332,7 @@ void PerimeterGenerator::process_arachne(
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
             if (params.config.wave_overhangs && ! filled_area.empty())
-                append(out_wave_overhang_filled_area, filled_area);
+                append(out_wave_overhang_filled_area, support_mask_from_wave_filled_area(filled_area, surface, params, desired_wave_perimeters));
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);
@@ -1693,7 +1717,7 @@ void PerimeterGenerator::process_classic(
                                                                            params.config.wave_overhangs);
         if (!extra_perimeters.empty()) {
             if (params.config.wave_overhangs && ! filled_area.empty())
-                append(out_wave_overhang_filled_area, filled_area);
+                append(out_wave_overhang_filled_area, support_mask_from_wave_filled_area(filled_area, surface, params, desired_wave_perimeters));
             ExtrusionEntityCollection &this_islands_perimeters = static_cast<ExtrusionEntityCollection&>(*out_loops.entities.back());
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);
