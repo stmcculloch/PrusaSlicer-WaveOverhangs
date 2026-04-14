@@ -1309,7 +1309,7 @@ void PerimeterGenerator::process_arachne(
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);
             if (params.config.wave_overhangs && desired_wave_perimeters < loop_number + 1)
-                subtract_wave_replaced_perimeters(old_entities, wave_infill_areas, static_cast<uint16_t>(desired_wave_perimeters));
+                subtract_wave_replaced_perimeters(old_entities, to_expolygons(filled_area), static_cast<uint16_t>(desired_wave_perimeters));
             for (ExtrusionPaths &paths : extra_perimeters) 
                 this_islands_perimeters.append(std::move(paths));
             append(this_islands_perimeters.entities, old_entities);
@@ -1690,7 +1690,7 @@ void PerimeterGenerator::process_classic(
             ExtrusionEntitiesPtr       old_entities;
             old_entities.swap(this_islands_perimeters.entities);
             if (params.config.wave_overhangs && desired_wave_perimeters < loop_number + 1)
-                subtract_wave_replaced_perimeters(old_entities, wave_infill_areas, static_cast<uint16_t>(desired_wave_perimeters));
+                subtract_wave_replaced_perimeters(old_entities, to_expolygons(filled_area), static_cast<uint16_t>(desired_wave_perimeters));
             for (ExtrusionPaths &paths : extra_perimeters) 
                 this_islands_perimeters.append(std::move(paths));
             append(this_islands_perimeters.entities, old_entities);
