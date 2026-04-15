@@ -666,7 +666,7 @@ inline bool has_compatible_layer_regions(const PrintRegionConfig &config, const 
            config.wave_overhang_pattern                                 == other_config.wave_overhang_pattern &&
            config.wave_overhang_line_spacing                            == other_config.wave_overhang_line_spacing &&
            config.wave_overhang_line_width                              == other_config.wave_overhang_line_width &&
-           config.wave_overhang_flow_multiplier                         == other_config.wave_overhang_flow_multiplier &&
+           config.wave_overhang_flow_ratio                              == other_config.wave_overhang_flow_ratio &&
            config.opt_serialize("perimeter_extrusion_width")     == other_config.opt_serialize("perimeter_extrusion_width") &&
            config.thin_walls                                            == other_config.thin_walls &&
            config.external_perimeters_first                             == other_config.external_perimeters_first &&
