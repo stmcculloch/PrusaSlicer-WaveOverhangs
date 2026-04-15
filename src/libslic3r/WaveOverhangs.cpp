@@ -305,10 +305,14 @@ bool should_generate_waves_for_region(const Polygons &overhang_to_cover,
                                       const Polygons &real_overhang,
                                       const Polygons &anchors,
                                       const Polygons &inset_anchors,
-                                      const Flow     &overhang_flow)
+                                      const Flow     &overhang_flow,
+                                      bool            use_instead_of_bridges)
 {
     if (real_overhang.empty())
         return false;
+
+    if (use_instead_of_bridges)
+        return true;
 
     if (! overhang_region.holes.empty())
         return true;
@@ -599,7 +603,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
-    double          scaled_resolution)
+    double          scaled_resolution,
+    bool            use_instead_of_bridges)
 {
     const coord_t base_spacing       = overhang_flow.scaled_spacing();
     const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
@@ -634,7 +639,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
         Polygons real_overhang     = intersection(wave_cover_area, overhangs);
         if (real_overhang.empty())
             wave_cover_area.clear();
-        else if (! should_generate_waves_for_region(wave_cover_area, overhang, real_overhang, anchors, inset_anchors, overhang_flow))
+        else if (! should_generate_waves_for_region(wave_cover_area, overhang, real_overhang, anchors, inset_anchors, overhang_flow, use_instead_of_bridges))
             wave_cover_area.clear();
 
         ExtrusionPaths &overhang_region = wave_paths.emplace_back();

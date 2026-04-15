@@ -1008,7 +1008,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate_overhang_toolpaths(Ex
             region_config.wave_overhang_pattern.value,
             region_config.wave_overhang_line_spacing.value,
             region_config.wave_overhang_line_width.value,
-            overhang_flow, scaled_resolution);
+            overhang_flow, scaled_resolution,
+            region_config.wave_overhangs_instead_of_bridges.value);
     }
 
     return generate_extra_perimeters_over_overhangs(

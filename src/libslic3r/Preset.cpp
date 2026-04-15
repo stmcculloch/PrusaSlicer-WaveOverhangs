@@ -472,6 +472,7 @@ static std::vector<std::string> s_Preset_print_options {
     "layer_height", "first_layer_height", "perimeters", "spiral_vase", "slice_closing_radius", "slicing_mode",
     "top_solid_layers", "top_solid_min_thickness", "bottom_solid_layers", "bottom_solid_min_thickness",
     "ensure_vertical_shell_thickness", "extra_perimeters", "extra_perimeters_on_overhangs", "wave_overhangs",
+    "wave_overhangs_instead_of_bridges",
     "wave_overhang_outer_perimeters", "wave_overhang_perimeter_overlap", "wave_overhang_narrow_split_threshold", "wave_overhang_pattern", "wave_overhang_line_spacing", "wave_overhang_line_width",
     "avoid_crossing_curled_overhangs", "avoid_crossing_perimeters", "thin_walls", "overhangs",
     "seam_position", "staggered_inner_seams", "seam_gap_distance",

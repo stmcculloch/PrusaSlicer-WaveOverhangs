@@ -27,7 +27,8 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     double          wave_line_spacing,
     double          wave_line_width,
     const Flow     &overhang_flow,
-    double          scaled_resolution);
+    double          scaled_resolution,
+    bool            use_instead_of_bridges = false);
 
 } // namespace Slic3r::WaveOverhangs
 

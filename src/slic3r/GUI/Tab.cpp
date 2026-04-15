@@ -1467,6 +1467,7 @@ void TabPrint::build()
         optgroup->append_single_option_line("extra_perimeters", category_path + "extra-perimeters-if-needed");
         optgroup->append_single_option_line("extra_perimeters_on_overhangs", category_path + "extra-perimeters-on-overhangs");
         optgroup->append_single_option_line("wave_overhangs", category_path + "use-wave-overhangs");
+        optgroup->append_single_option_line("wave_overhangs_instead_of_bridges");
         optgroup->append_single_option_line("wave_overhang_outer_perimeters");
         optgroup->append_single_option_line("wave_overhang_perimeter_overlap");
         optgroup->append_single_option_line("wave_overhang_narrow_split_threshold");
@@ -1583,9 +1584,9 @@ void TabPrint::build()
         optgroup->append_single_option_line("support_material_interface_spacing", category_path + "interface-pattern-spacing");
         optgroup->append_single_option_line("support_material_interface_contact_loops", category_path + "interface-loops");
         optgroup->append_single_option_line("support_material_buildplate_only", category_path + "support-on-build-plate-only");
-        optgroup->append_single_option_line("support_remaining_areas_after_wave_overhangs");
         optgroup->append_single_option_line("support_material_xy_spacing", category_path + "xy-separation-between-an-object-and-its-support");
         optgroup->append_single_option_line("dont_support_bridges", category_path + "dont-support-bridges");
+        optgroup->append_single_option_line("support_remaining_areas_after_wave_overhangs");
         optgroup->append_single_option_line("support_material_synchronize_layers", category_path + "synchronize-with-object-layers");
 
         optgroup = page->new_optgroup(L("Organic supports"));

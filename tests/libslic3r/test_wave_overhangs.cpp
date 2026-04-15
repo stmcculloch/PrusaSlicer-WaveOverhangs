@@ -161,3 +161,21 @@ TEST_CASE("Wave overhangs still claim holed spans even when bridging looks viabl
     REQUIRE(! regions.empty());
     CHECK(! filled_area.empty());
 }
+
+TEST_CASE("Wave overhangs can optionally replace bridgeable spans", "[WaveOverhangs]")
+{
+    ExPolygon infill{ Polygon::new_scale({ { 0, 0 }, { 60, 0 }, { 60, 20 }, { 0, 20 } }) };
+    Polygons lower_support = {
+        Polygon::new_scale({ { 0, 0 }, { 20, 0 }, { 20, 20 }, { 0, 20 } }),
+        Polygon::new_scale({ { 40, 0 }, { 60, 0 }, { 60, 20 }, { 40, 20 } })
+    };
+
+    Flow flow(1., 1., 1.);
+    auto [default_regions, default_filled] = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01));
+    auto [wave_regions, wave_filled]       = WaveOverhangs::generate({ infill }, lower_support, 2, 1, 0.1, 2.0, WaveOverhangPattern::Smart, 1.0, 0.75, flow, scale_(0.01), true);
+
+    CHECK(default_regions.empty());
+    CHECK(default_filled.empty());
+    REQUIRE(! wave_regions.empty());
+    CHECK(! wave_filled.empty());
+}

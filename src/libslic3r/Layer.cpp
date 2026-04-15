@@ -659,6 +659,7 @@ inline bool has_compatible_layer_regions(const PrintRegionConfig &config, const 
            (config.gap_fill_enabled ? config.gap_fill_speed.value : 0.) == (other_config.gap_fill_enabled ? other_config.gap_fill_speed.value : 0.) &&
            config.overhangs                                             == other_config.overhangs &&
            config.wave_overhangs                                        == other_config.wave_overhangs &&
+           config.wave_overhangs_instead_of_bridges                     == other_config.wave_overhangs_instead_of_bridges &&
            config.wave_overhang_outer_perimeters                        == other_config.wave_overhang_outer_perimeters &&
            config.wave_overhang_perimeter_overlap                       == other_config.wave_overhang_perimeter_overlap &&
            config.wave_overhang_narrow_split_threshold                  == other_config.wave_overhang_narrow_split_threshold &&

@@ -1159,6 +1159,13 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionBool(false));
 
+    def = this->add("wave_overhangs_instead_of_bridges", coBool);
+    def->label = L("Use wave overhangs instead of bridges");
+    def->category = L("Layers and Perimeters");
+    def->tooltip = L("When wave overhangs are enabled, allow them to replace spans that the normal bridge detector would otherwise keep as bridges.");
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionBool(false));
+
     def = this->add("wave_overhang_outer_perimeters", coInt);
     def->label = L("Outer perimeters during wave overhangs");
     def->category = L("Layers and Perimeters");
@@ -3378,7 +3385,7 @@ void PrintConfigDef::init_fff_params()
     def->set_default_value(new ConfigOptionBool(false));
 
     def = this->add("support_remaining_areas_after_wave_overhangs", coBool);
-    def->label = L("Support unfilled wave overhang areas");
+    def->label = L("Don't support wave overhangs");
     def->category = L("Support material");
     def->tooltip = L("When wave overhangs are enabled, generate supports only for overhang areas that were not filled by propagated wave toolpaths. Explicit support enforcers still apply normally.");
     def->mode = comExpert;

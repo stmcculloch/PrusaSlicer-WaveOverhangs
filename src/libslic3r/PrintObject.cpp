@@ -725,6 +725,7 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "extra_perimeters"
             || opt_key == "extra_perimeters_on_overhangs"
             || opt_key == "wave_overhangs"
+            || opt_key == "wave_overhangs_instead_of_bridges"
             || opt_key == "wave_overhang_outer_perimeters"
             || opt_key == "wave_overhang_perimeter_overlap"
             || opt_key == "wave_overhang_narrow_split_threshold"
