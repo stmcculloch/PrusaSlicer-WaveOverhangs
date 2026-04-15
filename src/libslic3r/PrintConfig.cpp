@@ -1222,6 +1222,15 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0.4));
 
+    def = this->add("wave_overhang_flow_multiplier", coPercent);
+    def->label = L("Wave overhang flow multiplier");
+    def->category = L("Flow");
+    def->tooltip = L("Extra flow applied only while printing wave-overhang paths. This does not change the geometric line width model used for wave generation. Values below 100% are ignored.");
+    def->sidetext = L("%");
+    def->min = 100;
+    def->mode = comExpert;
+    def->set_default_value(new ConfigOptionPercent(100));
+
     def = this->add("wave_overhang_print_speed", coFloat);
     def->label = L("Wave overhang print speed");
     def->category = L("Speed");

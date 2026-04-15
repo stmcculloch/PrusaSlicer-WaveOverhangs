@@ -327,13 +327,6 @@ bool should_generate_waves_for_region(const Polygons &overhang_to_cover,
            unsupported_dist >= total_length(real_overhang) * 0.2;
 }
 
-void tag_wave_overhang_paths(std::vector<ExtrusionPaths> &wave_paths)
-{
-    for (ExtrusionPaths &region : wave_paths)
-        for (ExtrusionPath &path : region)
-            path.attributes_mutable().wave_overhang = true;
-}
-
 void append_shell_perimeters(ExtrusionPaths &overhang_region,
                              const Polygons &overhang_to_cover,
                              int             outer_perimeter_count,
@@ -371,7 +364,10 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
 
     if (wave_pattern == WaveOverhangPattern::Monotonic) {
         Polylines monotonic_fronts = fronts;
-        extrusion_paths_append(overhang_region, monotonic_fronts, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        ExtrusionAttributes wave_attrs{ ExtrusionRole::OverhangPerimeter, wave_flow };
+        wave_attrs.wave_overhang = true;
+        wave_attrs.wave_overhang_material = true;
+        extrusion_paths_append(overhang_region, monotonic_fronts, wave_attrs);
         return;
     }
 
@@ -406,7 +402,10 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
                 current.append(std::move(front));
         }
 
-        extrusion_paths_append(overhang_region, merged, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        ExtrusionAttributes wave_attrs{ ExtrusionRole::OverhangPerimeter, wave_flow };
+        wave_attrs.wave_overhang = true;
+        wave_attrs.wave_overhang_material = true;
+        extrusion_paths_append(overhang_region, merged, wave_attrs);
         return;
     }
 
@@ -491,8 +490,11 @@ void append_wave_fronts(ExtrusionPaths &overhang_region,
         if (reverse_score > forward_score)
             front.reverse();
 
-        overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
-        support_paths.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+        ExtrusionAttributes wave_attrs{ ExtrusionRole::OverhangPerimeter, wave_flow };
+        wave_attrs.wave_overhang = true;
+        wave_attrs.wave_overhang_material = true;
+        overhang_region.emplace_back(front, wave_attrs);
+        support_paths.emplace_back(front, wave_attrs);
     }
 }
 
@@ -513,7 +515,10 @@ void append_zig_zag_front_levels(ExtrusionPaths               &overhang_region,
 
     auto append_or_start = [&](Polyline &&front) {
         if (overhang_region.empty()) {
-            overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+            ExtrusionAttributes wave_attrs{ ExtrusionRole::OverhangPerimeter, wave_flow };
+            wave_attrs.wave_overhang = true;
+            wave_attrs.wave_overhang_material = true;
+            overhang_region.emplace_back(front, wave_attrs);
             return;
         }
 
@@ -523,7 +528,10 @@ void append_zig_zag_front_levels(ExtrusionPaths               &overhang_region,
         const double best_d = std::min(d_keep, d_flip);
 
         if (best_d > max_connector_distance_sq) {
-            overhang_region.emplace_back(front, ExtrusionAttributes{ ExtrusionRole::OverhangPerimeter, wave_flow });
+            ExtrusionAttributes wave_attrs{ ExtrusionRole::OverhangPerimeter, wave_flow };
+            wave_attrs.wave_overhang = true;
+            wave_attrs.wave_overhang_material = true;
+            overhang_region.emplace_back(front, wave_attrs);
             return;
         }
 
@@ -733,7 +741,9 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
             wave_paths.pop_back();
     }
 
-    tag_wave_overhang_paths(wave_paths);
+    for (ExtrusionPaths &region : wave_paths)
+        for (ExtrusionPath &path : region)
+            path.attributes_mutable().wave_overhang = true;
     return { wave_paths, union_safety_offset(closing_ex(filled_area, float(filled_area_regularization), jtRound, 0.)) };
 }
 

@@ -3428,6 +3428,13 @@ std::string GCodeGenerator::_extrude(
 
     // calculate extrusion length per distance unit
     double e_per_mm = m_writer.extruder()->e_per_mm3() * path_attr.mm3_per_mm;
+    if (path_attr.wave_overhang_material) {
+        // Apply the correction only to emitted material volume for wave-overhang paths.
+        // Keep the geometric flow model unchanged so wave generation, spacing, and preview width
+        // continue to use the desired line width setting.
+        const double wave_overhang_flow_multiplier = std::max(100.0, m_config.wave_overhang_flow_multiplier.value) / 100.0;
+        e_per_mm *= wave_overhang_flow_multiplier;
+    }
     if (m_writer.extrusion_axis().empty())
         // gcfNoExtrusion
         e_per_mm = 0;

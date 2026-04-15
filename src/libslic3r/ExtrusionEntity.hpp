@@ -156,6 +156,8 @@ struct ExtrusionAttributes : ExtrusionFlow
     std::optional<OverhangAttributes> overhang_attributes;
     // Set for custom wave-overhang paths so export can apply wave-specific modifiers without a new role.
     bool wave_overhang{false};
+    // Set only for the unsupported wave material lines themselves, excluding preserved shell perimeters.
+    bool wave_overhang_material{false};
     // Set only for external and internal perimeters. The external perimeter has value 0, the first internal perimeter has 1, and so on.
     std::optional<uint16_t> perimeter_index;
 };

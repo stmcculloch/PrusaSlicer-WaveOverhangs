@@ -737,6 +737,7 @@ PRINT_CONFIG_CLASS_DEFINE(
     ((ConfigOptionEnum<WaveOverhangPattern>, wave_overhang_pattern))
     ((ConfigOptionFloat,                wave_overhang_line_spacing))
     ((ConfigOptionFloat,                wave_overhang_line_width))
+    ((ConfigOptionPercent,              wave_overhang_flow_multiplier))
     ((ConfigOptionFloat,                wave_overhang_print_speed))
     ((ConfigOptionFloat,                wave_overhang_travel_speed))
     ((ConfigOptionFloat,                fill_angle))

@@ -937,6 +937,7 @@ bool PrintObject::invalidate_state_by_config_options(
             || opt_key == "solid_infill_speed"
             || opt_key == "first_layer_infill_speed"
             || opt_key == "top_solid_infill_speed"
+            || opt_key == "wave_overhang_flow_multiplier"
             || opt_key == "wave_overhang_print_speed"
             || opt_key == "wave_overhang_travel_speed") {
             invalidated |= m_print->invalidate_step(psGCodeExport);
