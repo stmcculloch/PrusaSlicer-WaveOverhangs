@@ -1162,7 +1162,7 @@ void PrintConfigDef::init_fff_params()
     def = this->add("wave_overhangs_instead_of_bridges", coBool);
     def->label = L("Use wave overhangs instead of bridges");
     def->category = L("Layers and Perimeters");
-    def->tooltip = L("When wave overhangs are enabled, allow them to replace spans that the normal bridge detector would otherwise keep as bridges.");
+    def->tooltip = L("When enabled, wave overhangs take priority over normal bridge generation for overhanging bottom surfaces. When disabled, PrusaSlicer may still keep ordinary bridges in simple bridge-friendly regions instead of generating wave paths.");
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionBool(false));
 
@@ -1225,7 +1225,7 @@ void PrintConfigDef::init_fff_params()
     def = this->add("wave_overhang_flow_ratio", coFloat);
     def->label = L("Wave overhang flow ratio");
     def->category = L("Flow");
-    def->tooltip = L("This factor affects the amount of plastic for wave-overhang material lines only. It does not change the geometric line width model used for wave generation. Values below 1 are ignored.");
+    def->tooltip = L("Flow ratio applied only to the unsupported wave-overhang material lines. This can help compensate for the non-standard teardrop-like bead shape these lines form in real prints, improving overlap and bonding without changing the desired wave line width or any wave-generation geometry.");
     def->min = 0;
     def->max = 2;
     def->mode = comExpert;

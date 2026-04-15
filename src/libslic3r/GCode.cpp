@@ -3432,7 +3432,7 @@ std::string GCodeGenerator::_extrude(
         // Apply the correction only to emitted material volume for wave-overhang paths.
         // Keep the geometric flow model unchanged so wave generation, spacing, and preview width
         // continue to use the desired line width setting.
-        const double wave_overhang_flow_ratio = std::max(1.0, m_config.wave_overhang_flow_ratio.value);
+        const double wave_overhang_flow_ratio = m_config.wave_overhang_flow_ratio.value;
         e_per_mm *= wave_overhang_flow_ratio;
     }
     if (m_writer.extrusion_axis().empty())
