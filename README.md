@@ -27,6 +27,10 @@ On smaller and more localized overhangs, the feature can also produce clean real
   <img src="doc/wave_overhangs/test_1_side_view.png" alt="Side view of clean wave overhang print example" width="49%" />
 </p>
 
+On larger overhangs, warping may become a limiting factor. [Read more](/doc/limitations.md)
+
+For a detailed explanation of the features, pattern choices, troubleshooting, and recommended starting values see [Wave Overhangs Guide](doc/wave-overhangs.md).
+
 Available settings:
 
 * `Use wave overhangs (Experimental)`: Enables the wave-overhang path in place of legacy extra overhang perimeters.
@@ -41,8 +45,6 @@ Available settings:
 * `Wave overhang fan speed`: Fan speed enforced while printing wave-overhang paths.
 
 Wave overhangs is available through the print settings shown above and is intended for unsupported overhang regions where you want to reduce or avoid support material.
-
-For a more user-focused explanation of the feature set, pattern choices, recommended starting values, and the rollout history in this fork, see [Wave Overhangs Guide](doc/wave-overhangs.md).
 
 ---
 
@@ -115,5 +117,8 @@ The PrusaSlicer is originally based on Slic3r by Alessandro Ranellucci.
 ### How can I use PrusaSlicer from the command line?
 
 Please refer to the [Command Line Interface](https://github.com/prusa3d/PrusaSlicer/wiki/Command-Line-Interface) wiki page.
+
+
+## References
 
 [^1]: J. A. Andersons, S. Sanchez, T. Vaneker, "Wave-inspired path-planning strategy for support-free horizontal overhangs in FDM," preprint, submitted for publication.
