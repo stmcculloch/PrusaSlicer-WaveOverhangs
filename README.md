@@ -9,16 +9,23 @@ Wave overhangs algorithm developed and tested by Janis A. Andersons, Solemé San
 
 Wave overhangs is a 3D printing slicing algorithm that lets you print 90 degree overhangs without support material. Toolpaths are generated recursively based on wave propagation theory. The waves continue until they fill the available space, diffracting around corners and even around holes.
 
-![Wave overhang comparison](docs/images/wave-overhang-comparison.png)
+![Wave overhang comparison](doc/wave_overhangs/fig_2_compare_standard_arc_and_wave_overhangs.png)[^1]
 
 <p>
-  <img src="docs/images/wave-overhang-hole-1.png" alt="Wave overhang around holes 1" width="49%" />
-  <img src="docs/images/wave-overhang-hole-2.png" alt="Wave overhang around holes 2" width="49%" />
+  <img src="doc/wave_overhangs/holes_handling_1.png" alt="Wave overhang around holes 1" width="49%" />
+  <img src="doc/wave_overhangs/holes_handling_2.png" alt="Wave overhang around holes 2" width="49%" />
 </p>
 
 Wave overhangs significantly improve upon the Arc Overhang algorithm by creating smoother surfaces and more streamlined toolpaths, as shown below.
 
-![Wave overhang printed sample](docs/images/wave-overhang-printed-sample.png)
+![Wave overhang printed sample](doc/wave_overhangs/fig_10_printed_sample_compare_arc_vs_wave.png)[^1]
+
+On smaller and more localized overhangs, the feature can also produce clean real-world prints:
+
+<p>
+  <img src="doc/wave_overhangs/test_1.png" alt="Clean wave overhang print example" width="49%" />
+  <img src="doc/wave_overhangs/test_1_side_view.png" alt="Side view of clean wave overhang print example" width="49%" />
+</p>
 
 Available settings:
 
@@ -34,7 +41,7 @@ Available settings:
 
 Wave overhangs is available through the print settings shown above and is intended for unsupported overhang regions where you want to reduce or avoid support material.
 
-For a more user-focused explanation of the feature set, pattern choices, recommended starting values, and the rollout history in this fork, see [Wave Overhangs Guide](docs/wave-overhangs.md).
+For a more user-focused explanation of the feature set, pattern choices, recommended starting values, and the rollout history in this fork, see [Wave Overhangs Guide](doc/wave-overhangs.md).
 
 ---
 
@@ -107,3 +114,5 @@ The PrusaSlicer is originally based on Slic3r by Alessandro Ranellucci.
 ### How can I use PrusaSlicer from the command line?
 
 Please refer to the [Command Line Interface](https://github.com/prusa3d/PrusaSlicer/wiki/Command-Line-Interface) wiki page.
+
+[^1]: J. A. Andersons, S. Sanchez, T. Vaneker, "Wave-inspired path-planning strategy for support-free horizontal overhangs in FDM," preprint, submitted for publication.

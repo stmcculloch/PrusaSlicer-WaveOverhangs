@@ -18,6 +18,8 @@ build-linux/*
 /build-default/
 /build-no-occt/
 /shareddeps/
+/out/
+/release/
 deps/build*
 deps/build-linux/*
 /.codex
