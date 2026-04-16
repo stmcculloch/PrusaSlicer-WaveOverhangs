@@ -30,8 +30,9 @@ On smaller and more localized overhangs, the feature can also produce clean real
 Available settings:
 
 * `Use wave overhangs (Experimental)`: Enables the wave-overhang path in place of legacy extra overhang perimeters.
-* `Outer perimeters during wave overhangs`: Total number of regular perimeter shells to keep over the overhanging region. This replaces the normal vertical-shell perimeter count inside the reclaimed overhang area instead of adding to it.
+* `Wave overhang perimeters`: Total number of regular perimeter shells to keep over the overhanging region. This replaces the normal vertical-shell perimeter count inside the reclaimed overhang area instead of adding to it.
 * `Wave overhang perimeter overlap`: Extends the wave propagation boundary slightly toward the kept perimeter so the last wave sits closer to the perimeter shell.
+* `Minimum wave width`: If a narrow neck in the wave region is smaller than this width, PrusaSlicer inserts a thin split there before propagation so fragile wave branches do not form.
 * `Wave overhang pattern`: Chooses whether wave tracks are printed in one direction at a time (`Monotonic`), connected into a back-and-forth path (`Zig Zag`), or started from the better-supported end of each new track (`Smart`).
 * `Wave overhang line spacing`: Centerline spacing between adjacent wave lines. This is the wave wavelength. Smaller spacing packs the wave fronts more tightly.
 * `Wave overhang line width`: Physical extrusion width used for wave paths. This changes extrusion amount and lets adjacent unsupported wave lines overlap for better lateral adhesion.

@@ -136,7 +136,7 @@ void ConfigManipulation::update_print_fff_config(DynamicPrintConfig* config, con
     if (config->opt_bool("wave_overhangs") &&
         config->opt_int("wave_overhang_outer_perimeters") > config->opt_int("perimeters"))
     {
-        wxString msg_text = _(L("Wave overhang outer perimeters cannot be greater than the normal perimeter count.\n\n"
+        wxString msg_text = _(L("Wave overhang perimeters cannot be greater than the normal perimeter count.\n\n"
                                 "The wave overhang perimeter count will be reduced to match the Perimeters setting."));
 
         MessageDialog dialog(m_msg_dlg_parent, msg_text, _(L("Wave overhangs")), wxICON_WARNING | wxOK);
@@ -304,7 +304,7 @@ void ConfigManipulation::toggle_print_fff_options(DynamicPrintConfig* config)
         toggle_field(el, have_perimeters);
 
     const bool have_wave_overhangs = have_perimeters && config->opt_bool("wave_overhangs");
-    for (auto el : { "wave_overhangs_instead_of_bridges", "wave_overhang_outer_perimeters", "wave_overhang_perimeter_overlap", "wave_overhang_narrow_split_threshold", "wave_overhang_pattern", "wave_overhang_line_spacing", "wave_overhang_line_width", "wave_overhang_flow_ratio", "wave_overhang_print_speed",
+    for (auto el : { "wave_overhangs_instead_of_bridges", "wave_overhang_outer_perimeters", "wave_overhang_perimeter_overlap", "wave_overhang_minimum_width", "wave_overhang_pattern", "wave_overhang_line_spacing", "wave_overhang_line_width", "wave_overhang_flow_ratio", "wave_overhang_print_speed",
                      "wave_overhang_travel_speed" })
         toggle_field(el, have_wave_overhangs);
 

@@ -77,14 +77,14 @@ Practical tuning range: roughly `0.05 mm` to `0.2 mm`
 
 ### `Minimum wave width`
 
-Prevents waves from propogating through very narrow passageways to improve printability. Very thin wave branches often do not print successfully.
+Prevents waves from propagating through very narrow passageways to improve printability. Very thin wave branches often do not print successfully.
 
 <p>
   <img src="wave_overhangs/release_alpha6_narrow_area_preview_2.png" alt="Before and after narrow-region handling" width="100%" />
 </p>
 
 - Larger values make the slicer split more aggressively before wave propagation.
-- Recommended starting value: `2.0 x wave spacing`
+- Recommended starting value: `0.7 mm`
 
 Raise it when:
 
@@ -182,7 +182,7 @@ Recommended starting value: `100%`
 ## Troublehsooting
 
 - Edge detaching from the kept perimeter: increase `Wave overhang perimeter overlap`.
-- Thin branches or necks breaking off: increase `Wave overhang narrow split threshold`.
+- Thin branches or necks breaking off: increase `Minimum wave width`.
 - Ordinary bridges appearing where you want waves: enable `Use wave overhangs instead of bridges`.
 - Weak bonding between wave lines: increase `Wave overhang flow ratio`.
 

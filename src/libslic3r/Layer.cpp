@@ -662,7 +662,7 @@ inline bool has_compatible_layer_regions(const PrintRegionConfig &config, const 
            config.wave_overhangs_instead_of_bridges                     == other_config.wave_overhangs_instead_of_bridges &&
            config.wave_overhang_outer_perimeters                        == other_config.wave_overhang_outer_perimeters &&
            config.wave_overhang_perimeter_overlap                       == other_config.wave_overhang_perimeter_overlap &&
-           config.wave_overhang_narrow_split_threshold                  == other_config.wave_overhang_narrow_split_threshold &&
+           config.wave_overhang_minimum_width                          == other_config.wave_overhang_minimum_width &&
            config.wave_overhang_pattern                                 == other_config.wave_overhang_pattern &&
            config.wave_overhang_line_spacing                            == other_config.wave_overhang_line_spacing &&
            config.wave_overhang_line_width                              == other_config.wave_overhang_line_width &&

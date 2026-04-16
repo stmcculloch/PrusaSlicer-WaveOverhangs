@@ -1167,7 +1167,7 @@ void PrintConfigDef::init_fff_params()
     def->set_default_value(new ConfigOptionBool(false));
 
     def = this->add("wave_overhang_outer_perimeters", coInt);
-    def->label = L("Outer perimeters during wave overhangs");
+    def->label = L("Wave overhang perimeters");
     def->category = L("Layers and Perimeters");
     def->tooltip = L("Total number of perimeter passes to keep over wave-overhang regions. Values above the local perimeter count for a region are capped to that region's actual perimeter count.");
     def->min = 1;
@@ -1183,14 +1183,14 @@ void PrintConfigDef::init_fff_params()
     def->mode = comExpert;
     def->set_default_value(new ConfigOptionFloat(0.1));
 
-    def = this->add("wave_overhang_narrow_split_threshold", coFloat);
-    def->label = L("Wave overhang narrow split threshold");
+    def = this->add("wave_overhang_minimum_width", coFloat);
+    def->label = L("Minimum wave width");
     def->category = L("Layers and Perimeters");
-    def->tooltip = L("If a narrow neck in the wave region is smaller than this multiplier times the wave line spacing, PrusaSlicer inserts a thin split there before propagation. Larger values split more aggressively.");
-    def->sidetext = L("x spacing");
+    def->tooltip = L("If a narrow neck in the wave region is smaller than this width, PrusaSlicer inserts a thin split there before propagation. Larger values split more aggressively.");
+    def->sidetext = L("mm");
     def->min = 0;
     def->mode = comExpert;
-    def->set_default_value(new ConfigOptionFloat(2.0));
+    def->set_default_value(new ConfigOptionFloat(0.7));
 
     def = this->add("wave_overhang_pattern", coEnum);
     def->label = L("Wave overhang pattern");

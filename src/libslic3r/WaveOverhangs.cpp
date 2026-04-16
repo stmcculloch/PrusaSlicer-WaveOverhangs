@@ -190,15 +190,15 @@ Polygon make_effective_split_slit(const ExPolygon &wave_cover, const Point &a, c
     return {};
 }
 
-Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, double narrow_split_threshold)
+Polygons generate_narrow_split_slits(const ExPolygon &wave_cover, coord_t wave_spacing, coord_t minimum_wave_width)
 {
-    const double threshold = std::max(0.0, narrow_split_threshold);
-    if (threshold <= 0.)
+    const coord_t effective_minimum_width = std::max<coord_t>(0, minimum_wave_width);
+    if (effective_minimum_width <= 0)
         return {};
 
-    const double max_gap_sq = std::pow(threshold * double(wave_spacing), 2);
+    const double max_gap_sq = std::pow(double(effective_minimum_width), 2);
     const coord_t slit_half_width = std::max<coord_t>(1, wave_spacing / 20);
-    const coord_t slit_extension  = std::max<coord_t>(slit_half_width, coord_t(std::ceil(threshold * double(wave_spacing))));
+    const coord_t slit_extension  = std::max<coord_t>(slit_half_width, effective_minimum_width);
     const std::array<double, 4> inset_fractions{{ 0.25, 0.5, 0.75, 1.0 }};
     const double duplicate_radius_sq = std::pow(0.5 * double(wave_spacing), 2);
     const size_t original_hole_count = wave_cover.holes.size();
@@ -606,7 +606,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     int             perimeter_count,
     int             additional_shell_count,
     double          wave_perimeter_overlap,
-    double          wave_narrow_split_threshold,
+    double          minimum_wave_width,
     WaveOverhangPattern wave_pattern,
     double          wave_line_spacing,
     double          wave_line_width,
@@ -618,6 +618,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
     const Flow    wave_flow          = wave_line_width > 0. ? overhang_flow.with_width(float(wave_line_width)) : overhang_flow;
     const coord_t perimeter_overlap  = std::max<coord_t>(0, wave_perimeter_overlap > 0. ? coord_t(scale_(wave_perimeter_overlap)) : 0);
     const coord_t wave_spacing       = std::max<coord_t>(1, wave_line_spacing > 0. ? coord_t(scale_(wave_line_spacing)) : base_spacing);
+    const coord_t min_wave_width     = std::max<coord_t>(0, minimum_wave_width > 0. ? coord_t(scale_(minimum_wave_width)) : 0);
     const coord_t anchors_size       = std::min(coord_t(scale_(EXTERNAL_INFILL_MARGIN)), base_spacing * (perimeter_count + 1));
     const coord_t seed_expansion     = std::max<coord_t>(1, base_spacing / 10);
     const coord_t shell_inner_edge   = additional_shell_count > 0 ? overhang_flow.scaled_width() + (additional_shell_count - 1) * base_spacing : 0;
@@ -655,7 +656,7 @@ std::tuple<std::vector<ExtrusionPaths>, Polygons> generate(
 
         for (const ExPolygon &wave_cover : union_ex(to_expolygons(wave_cover_area))) {
             ExPolygons split_wave_covers = { wave_cover };
-            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, wave_narrow_split_threshold); ! split_slits.empty())
+            if (Polygons split_slits = generate_narrow_split_slits(wave_cover, wave_spacing, min_wave_width); ! split_slits.empty())
                 split_wave_covers = union_ex(diff_ex(ExPolygons{ wave_cover }, split_slits));
 
             const Polygons &full_seed_cover_polygons = additional_shell_count > 0 ? overhang_to_cover : to_polygons(wave_cover);
