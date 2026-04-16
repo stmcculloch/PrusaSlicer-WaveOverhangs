@@ -14,7 +14,7 @@ Wave overhangs allow you to print unsupported overhangs with wave-shaped toolpat
 
 Compared with the earlier [arc-overhang approach](https://github.com/stmcculloch/arc-overhang), wave overhangs produce smoother, more elegant toolpaths and are better at handling difficult shapes, including concave areas and holes in the overhanging region.
 
-![Arc overhang comparison](wave_overhangs/printed_sample_arc_vs_wave.png)
+![Arc overhang comparison](wave_overhangs/printed_sample_arc_vs_wave.png) [^1]
 ![Toolpath comparison](wave_overhangs/fig_2_compare_standard_arc_and_wave_overhangs.png) [^1]
 ## Limitations
 
@@ -191,5 +191,7 @@ Recommended starting value: `100%`
 - [README](../README.md)
 - [Limitations](limitations.md)
 - [Wave-overhang releases](https://github.com/stmcculloch/PrusaSlicer-WaveOverhangs/releases)
+
+## References
 
 [^1]: J. A. Andersons, S. Sanchez, T. Vaneker, "Wave-inspired path-planning strategy for support-free horizontal overhangs in FDM," preprint, submitted for publication.

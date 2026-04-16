@@ -8,13 +8,18 @@ Warping of laterally supported overhangs is not a single failure mode with a sin
 
 An in-depth investigation into warping is still in progress. The current working view is that several mechanisms can act at the same time.
 
+<p>
+  <img src="wave_overhangs/test_3_warping_alt.png" alt="Alternate view of large overhang example showing warping" width="49%" />
+  <img src="wave_overhangs/test_3_warping.png" alt="Large overhang example showing warping" width="49%" />
+</p>
+
 ## Main warping mechanisms
 
 ### Thermal contraction from temperature gradients
 
 This is the most obvious and probably the most universal mechanism. Whenever different parts of a printed feature cool at different rates, they want to contract by different amounts. That creates residual stress, and residual stress creates deformation.
 
-![Thermal contraction from later layers](wave_overhangs/theory_thermal_gradient.png)
+![Thermal contraction from later layers](wave_overhangs/theory_thermal_gradient.png) [^1]
 
 For laterally supported overhangs, this means that adding layers above the unsupported region tends to curl the structure upward. This applies regardless of whether the base overhang path was generated with arcs, waves, or some other strategy.
 
@@ -26,8 +31,6 @@ One way to isolate this mechanism is to cool the unsupported layer more evenly f
 
 ![Uniform cooling concept used to reduce single-layer warping](wave_overhangs/theory_uniform_cooling.png) [^1]
 
-That result matters because it suggests at least part of the problem is directly tied to the cooling-induced temperature field, not only to the geometry of the path itself.
-
 ### Shape memory polymer effects
 
 Another suspected mechanism is shape memory polymer behavior in the deposited plastic.
@@ -36,26 +39,24 @@ Another suspected mechanism is shape memory polymer behavior in the deposited pl
 
 When a strand is deposited, the polymer chains can become locked into a stretched or otherwise non-equilibrium state. Later, when a subsequent layer reheats the earlier one, some of those chains can become mobile again and contract. That produces additional deformation that is difficult to predict from geometry or cooling alone.
 
-This is related to the broader class of effects used intentionally in 4D printing, but here it acts as another hard-to-model source of warping.
-
 ### Nozzle pressure on large spans
 
-Large single-layer overhang spans appear to suffer from another effect: the pressure of the extruded filament and nozzle interaction can push the unsupported region downward during deposition.
+Large single-layer overhang spans appear to suffer from another effect: the pressure of the extruded filament and nozzle interaction can deflect the unsupported region downward during deposition.
 
 ![Nozzle-pressure-induced deformation concept](wave_overhangs/theory_nozzle_pressure.png) [^1]
 
-Once early tracks are displaced, later tracks may be laid down slightly higher, and the failure can quickly cascade into severe distortion. One planned way to isolate this effect is to print on a 5-axis FDM setup and reorient the nozzle so it does not apply the same downward load to the overhang.
+Once early tracks are displaced, later tracks may be laid down slightly higher, and the failure can quickly cascade into severe distortion.
 
-## Why this is still under investigation
+## Why warping is still under investigation
 
-The important point is that these mechanisms can overlap:
+The important point is that these various warping mechanisms can overlap:
 
 - Later layers can induce thermal contraction.
 - Top-only cooling can warp even a single unsupported layer.
 - Reheating can reactivate polymer-chain contraction.
 - Nozzle pressure can physically disturb large spans during deposition.
 
-That is why there is no credible claim yet that warping is "solved." The current state is closer to active investigation plus a growing set of practical mitigations.
+The current state is closer to active investigation plus a growing set of practical mitigations.
 
 ## Example prints
 
@@ -87,27 +88,28 @@ Several print choices appear to make a meaningful difference already.
 
 Short-fiber-reinforced materials such as `GF-PLA` and `CF-PLA` appear especially promising. Compared with ordinary PLA, they can help because of:
 
-- Higher viscosity.
-- Higher thermal conductivity.
+- Higher viscosity due to fiber filling.
+- Higher thermal conductivity leading to faster cooling.
 - Lower coefficient of thermal expansion.
+- Higher rigidity, reducing deflection due to nozzle pressure
 
-Those three properties all tend to push in a favorable direction for overhang stability.
+These benefits all tend to push in a favorable direction for overhang stability.
 
 ### What happens above the LaSO matters a lot
 
-The layers deposited after the laterally supported overhang often matter as much as the overhang path itself. The key goal is to build a critical thickness as quickly as possible so the feature can resist bending before residual stresses accumulate too far.
+The layers deposited after the laterally supported overhang often matter as much as the overhang path itself with regard to warping.
 
 In practice, that suggests:
 
-- Remove bottom shells above the reclaimed overhang when possible.
+- Remove bottom shells above the overhang when possible.
 - Use the sparsest infill that still makes sense structurally.
 - Prefer `Lightning` infill when available.
 
 Infill pattern matters too. Straight, repetitive paths can contract in a strongly aligned direction and increase curl. More distributed or curved patterns spread those contraction directions out more favorably:
 
-- `Rectilinear` or other straight-line patterns may encourage curling.
-- `Gyroid` can behave better because its S-shaped paths can partly straighten as they contract.
-- `Lightning` is especially attractive because its branching directions distribute contraction more randomly.
+- `Lightning` is especially attractive because it uses sparse seed lines which.
+- `Rectilinear` or other straight-line patterns will encourage curling.
+- `Gyroid` may also be worth testing because its S-shaped paths may distribute warping stresses more evenly, or even straighten as lines contract.
 
 Related idea: using Hilbert curves in the layers above the LaSO may reduce residual stress enough to lower warping while still allowing multiple solid layers above the overhang. Stefan discussed this in a follow-up arc-overhang video: <https://youtu.be/TGa_KvKLDR8?t=455>.
 
@@ -138,7 +140,7 @@ The simplest version would be a threshold such as "if overhang area or cantileve
 
 ## Current takeaway
 
-Warping is a known issue, not an ignored one. The main open question is not whether warping exists, but which mechanisms dominate under which conditions and how far slicer settings and process tuning can push the problem before support material becomes the better option.
+Warping is a known issue. Warping significantly limits the size of overhangs that can be printed. The main open question are which mechanisms are most significant and how far slicer settings and process tuning can mitigate the problem.
 
 For now, the strongest levers appear to be material choice, tuning of the layers above the overhang, cooling strategy, nozzle temperature, and being realistic about the span sizes where unsupported wave overhangs should be attempted.
 
@@ -146,5 +148,7 @@ For now, the strongest levers appear to be material choice, tuning of the layers
 
 - [Wave Overhangs Guide](wave-overhangs.md)
 - [Wave-overhang releases](https://github.com/stmcculloch/PrusaSlicer-WaveOverhangs/releases)
+
+## References
 
 [^1]: J. A. Andersons, S. Sanchez, T. Vaneker, "Wave-inspired path-planning strategy for support-free horizontal overhangs in FDM," preprint, submitted for publication.
