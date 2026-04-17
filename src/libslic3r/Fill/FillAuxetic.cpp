@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "../ClipperUtils.hpp"
+#include "../PrincipalComponents2D.hpp"
 #include "../ShortestPath.hpp"
 #include "../Surface.hpp"
 
@@ -93,8 +94,17 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
     }
 
     // The prototype defines the auxetic cell with its straight bars horizontal.
-    // Align that axis with the bridge / seed-derived straight-line direction.
-    const float base_angle = surface->bridge_angle >= 0. ? float(surface->bridge_angle) : this->angle;
+    // Prefer the explicit bridge / anchor-derived direction. If this surface does
+    // not carry one, derive a local best-fit axis from the filled region and
+    // keep the straight bars parallel to that axis.
+    float base_angle = this->angle;
+    if (surface->bridge_angle >= 0.) {
+        base_angle = float(surface->bridge_angle);
+    } else {
+        auto [pc1, pc2] = compute_principal_components(to_polygons(surface->expolygon));
+        if (pc1 != Vec2f::Zero())
+            base_angle = float(std::atan2(pc1.y(), pc1.x()));
+    }
     const float pattern_angle = base_angle;
 
     ExPolygon rotated_expolygon = surface->expolygon;
