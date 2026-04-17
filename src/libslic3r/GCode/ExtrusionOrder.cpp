@@ -65,6 +65,30 @@ std::optional<InstancePoint> get_instance_point(const std::optional<Point> &poin
 
 using ExtractEntityPredicate = std::function<bool(const ExtrusionEntityCollection&, const PrintRegion&)>;
 
+bool preserve_infill_order(const PrintRegion &region, const ExtrusionEntitiesPtr &fills)
+{
+    if (region.config().fill_pattern.value != ipAuxetic)
+        return false;
+
+    for (const ExtrusionEntity *fill : fills)
+        if (const auto *eec = dynamic_cast<const ExtrusionEntityCollection*>(fill); eec != nullptr && eec->no_sort)
+            return true;
+
+    return false;
+}
+
+ExtrusionEntityReferences ordered_fill_extrusions(const ExtrusionEntitiesPtr &fills)
+{
+    ExtrusionEntityReferences ordered;
+    ordered.reserve(fills.size());
+    for (const ExtrusionEntity *fill : fills) {
+        if (fill == nullptr)
+            continue;
+        ordered.push_back({ *fill, false });
+    }
+    return ordered;
+}
+
 ExtrusionEntitiesPtr extract_infill_extrusions(
     const PrintRegion &region,
     const ExtrusionEntityCollection &fills,
@@ -189,7 +213,9 @@ std::vector<InfillRange> extract_infill_ranges(
 
         const std::optional<InstancePoint> previous_instance_point{get_instance_point(previous_position, offset)};
         const Point* start_near{previous_instance_point ? &(previous_instance_point->local_point) : nullptr};
-        const ExtrusionEntityReferences sorted_extrusions{sort_fill_extrusions(extrusions, start_near)};
+        const ExtrusionEntityReferences sorted_extrusions = preserve_infill_order(region, extrusions) ?
+            ordered_fill_extrusions(extrusions) :
+            sort_fill_extrusions(extrusions, start_near);
 
         std::vector<SmoothPath> paths;
         for (const ExtrusionEntityReference &extrusion_reference : sorted_extrusions) {

@@ -19,6 +19,7 @@ public:
 
     Polylines fill_surface(const Surface *surface, const FillParams &params) override;
     Polylines take_deferred_straights();
+    bool no_sort() const override { return true; }
     bool is_self_crossing() override { return false; }
 
 private:

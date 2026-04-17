@@ -100,25 +100,30 @@ double recommended_transverse_angle_bias(const Points &positions, const std::vec
     if (positions.empty() || edges.empty())
         return 0.;
 
+    double x_min = std::numeric_limits<double>::infinity();
+    double x_max = -std::numeric_limits<double>::infinity();
     double y_min = std::numeric_limits<double>::infinity();
     double y_max = -std::numeric_limits<double>::infinity();
     for (const Point &pt : positions) {
+        x_min = std::min(x_min, double(pt.x()));
+        x_max = std::max(x_max, double(pt.x()));
         y_min = std::min(y_min, double(pt.y()));
         y_max = std::max(y_max, double(pt.y()));
     }
 
+    const double x_mid       = 0.5 * (x_min + x_max);
+    const double x_half_span = std::max(0.5 * (x_max - x_min), 1e-9);
     const double y_mid       = 0.5 * (y_min + y_max);
-    const double y_half_span = std::max(0.5 * (y_max - y_min), 1e-9);
-    const double tol         = std::max(1e-9, 0.03 * (y_max - y_min));
+    const double tol         = std::max(1e-9, 0.03 * (x_max - x_min));
 
     struct EdgeMid {
         size_t index;
-        double y_midpoint;
+        double x_midpoint;
     };
     std::vector<EdgeMid> angled_edges;
     angled_edges.reserve(edges.size());
-    double edge_y_min = std::numeric_limits<double>::infinity();
-    double edge_y_max = -std::numeric_limits<double>::infinity();
+    double edge_x_min = std::numeric_limits<double>::infinity();
+    double edge_x_max = -std::numeric_limits<double>::infinity();
     for (size_t i = 0; i < edges.size(); ++i) {
         const auto &[a_idx, b_idx] = edges[i];
         const Point &a = positions[a_idx];
@@ -126,10 +131,10 @@ double recommended_transverse_angle_bias(const Points &positions, const std::vec
         if (is_horizontal_edge(a, b))
             continue;
 
-        const double mid = 0.5 * (double(a.y()) + double(b.y()));
+        const double mid = 0.5 * (double(a.x()) + double(b.x()));
         angled_edges.push_back({ i, mid });
-        edge_y_min = std::min(edge_y_min, mid);
-        edge_y_max = std::max(edge_y_max, mid);
+        edge_x_min = std::min(edge_x_min, mid);
+        edge_x_max = std::max(edge_x_max, mid);
     }
 
     if (angled_edges.empty())
@@ -138,17 +143,19 @@ double recommended_transverse_angle_bias(const Points &positions, const std::vec
     std::vector<double> biases;
     biases.reserve(angled_edges.size());
     for (const EdgeMid &edge_mid : angled_edges) {
-        if (edge_mid.y_midpoint < edge_y_min + tol && edge_mid.y_midpoint > edge_y_max - tol)
+        if (edge_mid.x_midpoint < edge_x_min + tol && edge_mid.x_midpoint > edge_x_max - tol)
             continue;
-        if (edge_mid.y_midpoint > edge_y_min + tol && edge_mid.y_midpoint < edge_y_max - tol)
+        if (edge_mid.x_midpoint > edge_x_min + tol && edge_mid.x_midpoint < edge_x_max - tol)
             continue;
 
         const auto &[a_idx, b_idx] = edges[edge_mid.index];
+        const double x0 = double(positions[a_idx].x());
+        const double x1 = double(positions[b_idx].x());
         const double y0 = double(positions[a_idx].y());
         const double y1 = double(positions[b_idx].y());
-        const double denom = (((y0 - y_mid) * (y0 - y_mid) * (y0 - y_mid)) -
-                              ((y1 - y_mid) * (y1 - y_mid) * (y1 - y_mid))) /
-                             (y_half_span * y_half_span);
+        const double denom = (((y0 - y_mid) * (x0 - x_mid) * (x0 - x_mid)) -
+                              ((y1 - y_mid) * (x1 - x_mid) * (x1 - x_mid))) /
+                             (x_half_span * x_half_span);
         if (std::abs(denom) > 1e-9)
             biases.push_back(-(y0 - y1) / denom);
     }
@@ -168,20 +175,25 @@ std::vector<Vec2d> apply_transverse_angle_bias(const Points &positions, double b
     if (positions.empty())
         return biased;
 
+    double x_min = std::numeric_limits<double>::infinity();
+    double x_max = -std::numeric_limits<double>::infinity();
     double y_min = std::numeric_limits<double>::infinity();
     double y_max = -std::numeric_limits<double>::infinity();
     for (const Point &pt : positions) {
+        x_min = std::min(x_min, double(pt.x()));
+        x_max = std::max(x_max, double(pt.x()));
         y_min = std::min(y_min, double(pt.y()));
         y_max = std::max(y_max, double(pt.y()));
     }
 
+    const double x_mid       = 0.5 * (x_min + x_max);
+    const double x_half_span = std::max(0.5 * (x_max - x_min), 1e-9);
     const double y_mid       = 0.5 * (y_min + y_max);
-    const double y_half_span = std::max(0.5 * (y_max - y_min), 1e-9);
 
     for (const Point &pt : positions) {
         const double x    = double(pt.x());
         const double y    = double(pt.y());
-        const double eta  = (y - y_mid) / y_half_span;
+        const double eta  = (x - x_mid) / x_half_span;
         const double gain = 1.0 + bias_strength * eta * eta;
         biased.emplace_back(x, y_mid + (y - y_mid) * gain);
     }
