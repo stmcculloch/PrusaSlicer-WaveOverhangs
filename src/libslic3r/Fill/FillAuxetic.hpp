@@ -41,6 +41,9 @@ private:
 
     using Cache = std::map<CacheID, CacheData>;
     mutable Cache m_cache;
+
+protected:
+    float _layer_angle(size_t) const override { return 0.f; }
 };
 
 } // namespace Slic3r

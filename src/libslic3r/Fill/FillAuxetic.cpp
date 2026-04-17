@@ -48,33 +48,29 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
         cache.y_inner     = corner_x;
     }
 
-    // Keep the full signed bridge / infill direction so a pi flip reverses which
-    // side receives the horizontal braces.
-    const float pattern_angle = this->_infill_direction(surface).first - float(M_PI / 2.);
+    // Bridge angle already points along the preferred straight infill direction.
+    // Rotate the cell so the auxetic vertical members follow that direction and
+    // the horizontal braces sit perpendicular to it.
+    const float base_angle = surface->bridge_angle >= 0. ? float(surface->bridge_angle) : this->angle;
+    const float pattern_angle = base_angle - float(M_PI / 2.);
 
     ExPolygon rotated_expolygon = surface->expolygon;
     rotated_expolygon.rotate(-pattern_angle);
 
     BoundingBox bounding_box = rotated_expolygon.contour.bounding_box();
-    if (! empty(this->bounding_box)) {
-        Polygon object_bb = this->bounding_box.polygon();
-        object_bb.rotate(-pattern_angle);
-        bounding_box.merge(align_to_grid(
-            bounding_box.min,
-            Point(cache.row_step, cache.column_step),
-            object_bb.bounding_box().center()));
-    }
+    const Point surface_center = bounding_box.center();
+    bounding_box.merge(align_to_grid(
+        bounding_box.min,
+        Point(cache.row_step, cache.column_step),
+        surface_center));
 
     const coord_t x_min = bounding_box.min.x() - cache.row_step - cache.x_outer;
     const coord_t x_max = bounding_box.max.x() + cache.row_step + cache.x_outer;
     const coord_t y_min = bounding_box.min.y() - cache.column_step - cache.y_outer;
     const coord_t y_max = bounding_box.max.y() + cache.column_step + cache.y_outer;
 
-    const Point object_center = empty(this->bounding_box) ?
-        bounding_box.center() :
-        this->bounding_box.center().rotated(-pattern_angle);
-    const coord_t ref_x = object_center.x();
-    const coord_t ref_y = object_center.y();
+    const coord_t ref_x = surface_center.x();
+    const coord_t ref_y = surface_center.y();
 
     Polylines all_polylines;
     for (int64_t column = int64_t(std::floor(double(y_min - ref_y) / cache.column_step)) - 2;

@@ -179,6 +179,7 @@ std::vector<SurfaceFill> group_fills(const Layer &layer)
 					//FIXME for non-thick bridges, shall we allow a bottom surface pattern?
 		            params.pattern = (surface.is_external() && ! is_bridge) ? 
 						(surface.is_top() ? region_config.top_fill_pattern.value : region_config.bottom_fill_pattern.value) :
+                        (is_bridge && region_config.fill_pattern.value == ipAuxetic) ? ipAuxetic :
 		                fill_type_monotonic(region_config.top_fill_pattern) ? ipMonotonic : ipRectilinear;
 		        } else if (params.density <= 0)
 		            continue;
