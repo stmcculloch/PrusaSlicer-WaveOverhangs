@@ -84,7 +84,13 @@ ExtrusionEntityReferences ordered_fill_extrusions(const ExtrusionEntitiesPtr &fi
     for (const ExtrusionEntity *fill : fills) {
         if (fill == nullptr)
             continue;
-        ordered.push_back({ *fill, false });
+
+        if (const auto *eec = dynamic_cast<const ExtrusionEntityCollection*>(fill); eec != nullptr) {
+            for (const ExtrusionEntityReference &ee : chain_extrusion_references(*eec, nullptr, false))
+                ordered.push_back(ee);
+        } else {
+            ordered.push_back({ *fill, false });
+        }
     }
     return ordered;
 }
