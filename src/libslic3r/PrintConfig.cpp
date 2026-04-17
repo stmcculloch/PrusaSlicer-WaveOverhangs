@@ -146,6 +146,7 @@ static const t_config_enum_values s_keys_map_InfillPattern {
     { "octagramspiral",     ipOctagramSpiral },
     { "adaptivecubic",      ipAdaptiveCubic },
     { "supportcubic",       ipSupportCubic },
+    { "auxetic",            ipAuxetic },
     { "lightning",          ipLightning },
     { "zigzag",             ipZigZag }
 };
@@ -1715,6 +1716,7 @@ void PrintConfigDef::init_fff_params()
         { "octagramspiral",     L("Octagram Spiral")},
         { "adaptivecubic",      L("Adaptive Cubic")},
         { "supportcubic",       L("Support Cubic")},
+        { "auxetic",            L("Auxetic")},
         { "lightning",          L("Lightning")},
         { "zigzag",             L("Zig Zag")}
     });
