@@ -83,9 +83,110 @@ inline bool is_horizontal_segment(const Polyline &polyline)
     return dy <= std::max<coord_t>(SCALED_EPSILON, dx / 8);
 }
 
+inline bool is_horizontal_edge(const Point &a, const Point &b)
+{
+    const coord_t dx = std::abs(b.x() - a.x());
+    const coord_t dy = std::abs(b.y() - a.y());
+    return dy <= std::max<coord_t>(SCALED_EPSILON, dx / 8);
+}
+
 inline bool point_less_xy(const Point &lhs, const Point &rhs)
 {
     return lhs.x() < rhs.x() || (lhs.x() == rhs.x() && lhs.y() < rhs.y());
+}
+
+double recommended_transverse_angle_bias(const Points &positions, const std::vector<std::pair<size_t, size_t>> &edges)
+{
+    if (positions.empty() || edges.empty())
+        return 0.;
+
+    double y_min = std::numeric_limits<double>::infinity();
+    double y_max = -std::numeric_limits<double>::infinity();
+    for (const Point &pt : positions) {
+        y_min = std::min(y_min, double(pt.y()));
+        y_max = std::max(y_max, double(pt.y()));
+    }
+
+    const double y_mid       = 0.5 * (y_min + y_max);
+    const double y_half_span = std::max(0.5 * (y_max - y_min), 1e-9);
+    const double tol         = std::max(1e-9, 0.03 * (y_max - y_min));
+
+    struct EdgeMid {
+        size_t index;
+        double y_midpoint;
+    };
+    std::vector<EdgeMid> angled_edges;
+    angled_edges.reserve(edges.size());
+    double edge_y_min = std::numeric_limits<double>::infinity();
+    double edge_y_max = -std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i < edges.size(); ++i) {
+        const auto &[a_idx, b_idx] = edges[i];
+        const Point &a = positions[a_idx];
+        const Point &b = positions[b_idx];
+        if (is_horizontal_edge(a, b))
+            continue;
+
+        const double mid = 0.5 * (double(a.y()) + double(b.y()));
+        angled_edges.push_back({ i, mid });
+        edge_y_min = std::min(edge_y_min, mid);
+        edge_y_max = std::max(edge_y_max, mid);
+    }
+
+    if (angled_edges.empty())
+        return 0.;
+
+    std::vector<double> biases;
+    biases.reserve(angled_edges.size());
+    for (const EdgeMid &edge_mid : angled_edges) {
+        if (edge_mid.y_midpoint < edge_y_min + tol && edge_mid.y_midpoint > edge_y_max - tol)
+            continue;
+        if (edge_mid.y_midpoint > edge_y_min + tol && edge_mid.y_midpoint < edge_y_max - tol)
+            continue;
+
+        const auto &[a_idx, b_idx] = edges[edge_mid.index];
+        const double y0 = double(positions[a_idx].y());
+        const double y1 = double(positions[b_idx].y());
+        const double denom = (((y0 - y_mid) * (y0 - y_mid) * (y0 - y_mid)) -
+                              ((y1 - y_mid) * (y1 - y_mid) * (y1 - y_mid))) /
+                             (y_half_span * y_half_span);
+        if (std::abs(denom) > 1e-9)
+            biases.push_back(-(y0 - y1) / denom);
+    }
+
+    if (biases.empty())
+        return 0.;
+
+    std::sort(biases.begin(), biases.end());
+    const double median = biases[biases.size() / 2];
+    return std::clamp(median, -0.80, 1.20);
+}
+
+std::vector<Vec2d> apply_transverse_angle_bias(const Points &positions, double bias_strength)
+{
+    std::vector<Vec2d> biased;
+    biased.reserve(positions.size());
+    if (positions.empty())
+        return biased;
+
+    double y_min = std::numeric_limits<double>::infinity();
+    double y_max = -std::numeric_limits<double>::infinity();
+    for (const Point &pt : positions) {
+        y_min = std::min(y_min, double(pt.y()));
+        y_max = std::max(y_max, double(pt.y()));
+    }
+
+    const double y_mid       = 0.5 * (y_min + y_max);
+    const double y_half_span = std::max(0.5 * (y_max - y_min), 1e-9);
+
+    for (const Point &pt : positions) {
+        const double x    = double(pt.x());
+        const double y    = double(pt.y());
+        const double eta  = (y - y_mid) / y_half_span;
+        const double gain = 1.0 + bias_strength * eta * eta;
+        biased.emplace_back(x, y_mid + (y - y_mid) * gain);
+    }
+
+    return biased;
 }
 
 Polylines chain_zigzag_segments(Polylines segments)
@@ -315,10 +416,17 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
         }
     }
 
+    const double transverse_angle_bias = recommended_transverse_angle_bias(positions, edges);
+    const std::vector<Vec2d> biased_positions = apply_transverse_angle_bias(positions, transverse_angle_bias);
+
     Polylines all_polylines;
     all_polylines.reserve(edges.size());
-    for (const auto &[a, b] : edges)
-        all_polylines.emplace_back(positions[a], positions[b]);
+    for (const auto &[a, b] : edges) {
+        all_polylines.emplace_back(
+            Point(coord_t(std::llround(biased_positions[a].x())), coord_t(std::llround(biased_positions[a].y()))),
+            Point(coord_t(std::llround(biased_positions[b].x())), coord_t(std::llround(biased_positions[b].y())))
+        );
+    }
 
     all_polylines = intersection_pl(std::move(all_polylines), rotated_expolygon);
 
