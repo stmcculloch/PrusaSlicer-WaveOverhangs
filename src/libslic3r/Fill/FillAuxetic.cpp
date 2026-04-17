@@ -7,6 +7,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -65,6 +66,145 @@ inline void add_unique_edge(std::vector<std::pair<size_t, size_t>> &edges,
         edges.emplace_back(a, b);
 }
 
+inline PointKey point_key(const Point &pt)
+{
+    return PointKey{ pt.x(), pt.y() };
+}
+
+inline bool is_horizontal_segment(const Polyline &polyline)
+{
+    if (polyline.points.size() < 2)
+        return false;
+
+    const Point &a = polyline.points.front();
+    const Point &b = polyline.points.back();
+    const coord_t dx = std::abs(b.x() - a.x());
+    const coord_t dy = std::abs(b.y() - a.y());
+    return dy <= std::max<coord_t>(SCALED_EPSILON, dx / 8);
+}
+
+inline bool point_less_xy(const Point &lhs, const Point &rhs)
+{
+    return lhs.x() < rhs.x() || (lhs.x() == rhs.x() && lhs.y() < rhs.y());
+}
+
+Polylines chain_zigzag_segments(Polylines segments)
+{
+    struct SegmentRef {
+        size_t index;
+        bool   at_front;
+    };
+
+    std::unordered_map<PointKey, std::vector<SegmentRef>, PointKeyHash> adjacency;
+    adjacency.reserve(segments.size() * 2);
+    for (size_t i = 0; i < segments.size(); ++i) {
+        if (segments[i].points.size() < 2)
+            continue;
+        adjacency[point_key(segments[i].first_point())].push_back({ i, true });
+        adjacency[point_key(segments[i].last_point())].push_back({ i, false });
+    }
+
+    std::vector<char> visited(segments.size(), false);
+    std::vector<Point> starts;
+    starts.reserve(adjacency.size());
+    for (const auto &[key, refs] : adjacency)
+        if (refs.size() == 1)
+            starts.emplace_back(key.x, key.y);
+    std::sort(starts.begin(), starts.end(), point_less_xy);
+
+    auto follow_chain = [&](const Point &start_point) -> Polyline {
+        Polyline chain;
+        chain.points.push_back(start_point);
+        Point current = start_point;
+
+        for (;;) {
+            auto it = adjacency.find(point_key(current));
+            if (it == adjacency.end())
+                break;
+
+            size_t next_idx = std::numeric_limits<size_t>::max();
+            bool   current_at_front = false;
+            for (const SegmentRef &ref : it->second) {
+                if (! visited[ref.index]) {
+                    next_idx = ref.index;
+                    current_at_front = ref.at_front;
+                    break;
+                }
+            }
+
+            if (next_idx == std::numeric_limits<size_t>::max())
+                break;
+
+            visited[next_idx] = true;
+            const Polyline &segment = segments[next_idx];
+            if (current_at_front) {
+                chain.append(segment.points.begin() + 1, segment.points.end());
+                current = segment.last_point();
+            } else {
+                for (auto rit = segment.points.rbegin() + 1; rit != segment.points.rend(); ++rit)
+                    chain.points.push_back(*rit);
+                current = segment.first_point();
+            }
+        }
+
+        return chain;
+    };
+
+    Polylines chained;
+    chained.reserve(segments.size());
+    for (const Point &start : starts) {
+        Polyline chain = follow_chain(start);
+        if (chain.points.size() > 1)
+            chained.push_back(std::move(chain));
+    }
+
+    for (size_t i = 0; i < segments.size(); ++i) {
+        if (visited[i] || segments[i].points.size() < 2)
+            continue;
+
+        visited[i] = true;
+        Polyline chain = segments[i];
+        Point current = chain.last_point();
+        for (;;) {
+            auto it = adjacency.find(point_key(current));
+            if (it == adjacency.end())
+                break;
+
+            size_t next_idx = std::numeric_limits<size_t>::max();
+            bool   current_at_front = false;
+            for (const SegmentRef &ref : it->second) {
+                if (! visited[ref.index]) {
+                    next_idx = ref.index;
+                    current_at_front = ref.at_front;
+                    break;
+                }
+            }
+
+            if (next_idx == std::numeric_limits<size_t>::max())
+                break;
+
+            visited[next_idx] = true;
+            const Polyline &segment = segments[next_idx];
+            if (current_at_front) {
+                chain.append(segment.points.begin() + 1, segment.points.end());
+                current = segment.last_point();
+            } else {
+                for (auto rit = segment.points.rbegin() + 1; rit != segment.points.rend(); ++rit)
+                    chain.points.push_back(*rit);
+                current = segment.first_point();
+            }
+        }
+
+        if (chain.points.size() > 1)
+            chained.push_back(std::move(chain));
+    }
+
+    std::sort(chained.begin(), chained.end(), [](const Polyline &lhs, const Polyline &rhs) {
+        return point_less_xy(lhs.first_point(), rhs.first_point());
+    });
+    return chained;
+}
+
 } // namespace
 
 Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &params)
@@ -105,7 +245,7 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
         if (pc1 != Vec2f::Zero())
             base_angle = float(std::atan2(pc1.y(), pc1.x()));
     }
-    const float pattern_angle = base_angle;
+    const float pattern_angle = base_angle + float(0.5 * PI);
 
     ExPolygon rotated_expolygon = surface->expolygon;
     rotated_expolygon.rotate(-pattern_angle);
@@ -173,14 +313,32 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
         all_polylines.emplace_back(positions[a], positions[b]);
 
     all_polylines = intersection_pl(std::move(all_polylines), rotated_expolygon);
+
+    Polylines zigzag_segments;
+    Polylines horizontal_segments;
+    zigzag_segments.reserve(all_polylines.size());
+    horizontal_segments.reserve(all_polylines.size());
+    for (Polyline &polyline : all_polylines) {
+        if (polyline.points.size() < 2)
+            continue;
+        if (is_horizontal_segment(polyline))
+            horizontal_segments.push_back(std::move(polyline));
+        else
+            zigzag_segments.push_back(std::move(polyline));
+    }
+
+    std::sort(horizontal_segments.begin(), horizontal_segments.end(), [](const Polyline &lhs, const Polyline &rhs) {
+        const Point &la = lhs.first_point();
+        const Point &ra = rhs.first_point();
+        return la.y() < ra.y() || (la.y() == ra.y() && la.x() < ra.x());
+    });
+
+    all_polylines = chain_zigzag_segments(std::move(zigzag_segments));
+    polylines_append(all_polylines, std::move(horizontal_segments));
+
     for (Polyline &polyline : all_polylines)
         polyline.rotate(pattern_angle);
-
-    if (params.dont_connect() || all_polylines.size() <= 1 || all_polylines.size() > 256)
-        append(polylines_out, std::move(all_polylines));
-    else
-        connect_infill(std::move(all_polylines), surface->expolygon, polylines_out, this->spacing, params);
-
+    append(polylines_out, std::move(all_polylines));
     return polylines_out;
 }
 
