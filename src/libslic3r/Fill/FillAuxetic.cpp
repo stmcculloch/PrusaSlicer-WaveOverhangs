@@ -113,7 +113,6 @@ double recommended_transverse_angle_bias(const Points &positions, const std::vec
 
     const double x_mid       = 0.5 * (x_min + x_max);
     const double x_half_span = std::max(0.5 * (x_max - x_min), 1e-9);
-    const double y_mid       = 0.5 * (y_min + y_max);
     const double tol         = std::max(1e-9, 0.03 * (x_max - x_min));
 
     struct EdgeMid {
@@ -151,13 +150,11 @@ double recommended_transverse_angle_bias(const Points &positions, const std::vec
         const auto &[a_idx, b_idx] = edges[edge_mid.index];
         const double x0 = double(positions[a_idx].x());
         const double x1 = double(positions[b_idx].x());
-        const double y0 = double(positions[a_idx].y());
-        const double y1 = double(positions[b_idx].y());
-        const double denom = (((y0 - y_mid) * (x0 - x_mid) * (x0 - x_mid)) -
-                              ((y1 - y_mid) * (x1 - x_mid) * (x1 - x_mid))) /
+        const double denom = (((x0 - x_mid) * (x0 - x_mid) * (x0 - x_mid)) -
+                              ((x1 - x_mid) * (x1 - x_mid) * (x1 - x_mid))) /
                              (x_half_span * x_half_span);
         if (std::abs(denom) > 1e-9)
-            biases.push_back(-(y0 - y1) / denom);
+            biases.push_back(-(x0 - x1) / denom);
     }
 
     if (biases.empty())
@@ -188,14 +185,13 @@ std::vector<Vec2d> apply_transverse_angle_bias(const Points &positions, double b
 
     const double x_mid       = 0.5 * (x_min + x_max);
     const double x_half_span = std::max(0.5 * (x_max - x_min), 1e-9);
-    const double y_mid       = 0.5 * (y_min + y_max);
 
     for (const Point &pt : positions) {
         const double x    = double(pt.x());
         const double y    = double(pt.y());
         const double eta  = (x - x_mid) / x_half_span;
         const double gain = 1.0 + bias_strength * eta * eta;
-        biased.emplace_back(x, y_mid + (y - y_mid) * gain);
+        biased.emplace_back(x_mid + (x - x_mid) * gain, y);
     }
 
     return biased;
