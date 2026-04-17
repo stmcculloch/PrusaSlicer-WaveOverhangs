@@ -29,6 +29,7 @@
 // for Arachne based infills
 #include "../PerimeterGenerator.hpp"
 #include "FillBase.hpp"
+#include "FillAuxetic.hpp"
 #include "FillRectilinear.hpp"
 #include "FillLightning.hpp"
 #include "FillEnsuring.hpp"
@@ -482,6 +483,16 @@ void Layer::make_fills(FillAdaptive::Octree* adaptive_fill_octree, FillAdaptive:
 {
 	this->clear_fills();
 
+    struct DeferredAuxeticFill {
+        LayerRegion *layerm{ nullptr };
+        size_t       region_id{ size_t(-1) };
+        Polylines    polylines;
+        ExtrusionAttributes attrs;
+        bool         no_sort{ false };
+        bool         can_reverse{ true };
+    };
+    std::vector<DeferredAuxeticFill> deferred_auxetic_fills;
+
     std::vector<SurfaceFill>  surface_fills       = group_fills(*this);
     const Slic3r::BoundingBox bbox                = this->object()->bounding_box();
     const auto                resolution          = this->object()->print()->config().gcode_resolution.value;
@@ -555,6 +566,7 @@ void Layer::make_fills(FillAdaptive::Octree* adaptive_fill_octree, FillAdaptive:
 			surface_fill.surface.expolygon = std::move(expoly);
             Polylines      polylines;
             ThickPolylines thick_polylines;
+            Polylines      deferred_straights;
 			try {
                 if (params.use_arachne)
                     thick_polylines = f->fill_surface_arachne(&surface_fill.surface, params);
@@ -562,7 +574,11 @@ void Layer::make_fills(FillAdaptive::Octree* adaptive_fill_octree, FillAdaptive:
 				    polylines = f->fill_surface(&surface_fill.surface, params);
 			} catch (InfillFailedException &) {
 			}
-            if (!polylines.empty() || !thick_polylines.empty()) {
+            if (surface_fill.params.pattern == ipAuxetic) {
+                if (auto *fill_auxetic = dynamic_cast<FillAuxetic *>(f.get()))
+                    deferred_straights = fill_auxetic->take_deferred_straights();
+            }
+            if (!polylines.empty() || !thick_polylines.empty() || !deferred_straights.empty()) {
                 // calculate actual flow from spacing (which might have been adjusted by the infill
 		        // pattern generator)
 		        double flow_mm3_per_mm = surface_fill.params.flow.mm3_per_mm();
@@ -576,6 +592,21 @@ void Layer::make_fills(FillAdaptive::Octree* adaptive_fill_octree, FillAdaptive:
 		        	flow_mm3_per_mm = new_flow.mm3_per_mm();
 		        	flow_width      = new_flow.width();
 		        }
+
+                if (! deferred_straights.empty()) {
+                    deferred_auxetic_fills.push_back(DeferredAuxeticFill{
+                        &layerm,
+                        surface_fill.region_id,
+                        std::move(deferred_straights),
+                        ExtrusionAttributes{
+                            surface_fill.params.extrusion_role,
+                            ExtrusionFlow{ flow_mm3_per_mm, float(flow_width), surface_fill.params.flow.height() },
+                            f->is_self_crossing()
+                        },
+                        f->no_sort(),
+                        ! params.prefer_clockwise_movements
+                    });
+                }
                 // Save into layer.
                 ExtrusionEntityCollection *eec        = new ExtrusionEntityCollection();
                 auto                       fill_begin = uint32_t(layerm.fills().size());
@@ -615,6 +646,19 @@ void Layer::make_fills(FillAdaptive::Octree* adaptive_fill_octree, FillAdaptive:
                 insert_fills_into_islands(*this, uint32_t(surface_fill.region_id), fill_begin, uint32_t(layerm.fills().size()));
 		    }
 		}
+    }
+
+    for (DeferredAuxeticFill &deferred : deferred_auxetic_fills) {
+        if (deferred.polylines.empty() || deferred.layerm == nullptr)
+            continue;
+
+        ExtrusionEntityCollection *eec        = new ExtrusionEntityCollection();
+        auto                       fill_begin = uint32_t(deferred.layerm->fills().size());
+        eec->no_sort = deferred.no_sort;
+        extrusion_entities_append_paths(
+            eec->entities, std::move(deferred.polylines), deferred.attrs, deferred.can_reverse);
+        deferred.layerm->m_fills.entities.push_back(eec);
+        insert_fills_into_islands(*this, uint32_t(deferred.region_id), fill_begin, uint32_t(deferred.layerm->fills().size()));
     }
 
 	for (LayerSlice &lslice : this->lslices_ex)
@@ -745,6 +789,12 @@ Polylines Layer::generate_sparse_infill_polylines_for_anchoring(FillAdaptive::Oc
             try {
                 Polylines polylines = f->fill_surface(&surface_fill.surface, params);
                 sparse_infill_polylines.insert(sparse_infill_polylines.end(), polylines.begin(), polylines.end());
+                if (surface_fill.params.pattern == ipAuxetic) {
+                    if (auto *fill_auxetic = dynamic_cast<FillAuxetic *>(f.get())) {
+                        Polylines deferred_straights = fill_auxetic->take_deferred_straights();
+                        sparse_infill_polylines.insert(sparse_infill_polylines.end(), deferred_straights.begin(), deferred_straights.end());
+                    }
+                }
             } catch (InfillFailedException &) {}
         }
     }

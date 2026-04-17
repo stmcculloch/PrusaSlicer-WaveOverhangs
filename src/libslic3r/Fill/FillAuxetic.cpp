@@ -207,9 +207,17 @@ Polylines chain_zigzag_segments(Polylines segments)
 
 } // namespace
 
+Polylines FillAuxetic::take_deferred_straights()
+{
+    Polylines out = std::move(m_deferred_straights);
+    m_deferred_straights.clear();
+    return out;
+}
+
 Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &params)
 {
     Polylines polylines_out;
+    m_deferred_straights.clear();
     if (params.density <= 0.f || surface->expolygon.empty())
         return polylines_out;
 
@@ -334,10 +342,13 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
     });
 
     all_polylines = chain_zigzag_segments(std::move(zigzag_segments));
-    polylines_append(all_polylines, std::move(horizontal_segments));
+    m_deferred_straights = std::move(horizontal_segments);
 
     for (Polyline &polyline : all_polylines)
         polyline.rotate(pattern_angle);
+    for (Polyline &polyline : m_deferred_straights)
+        polyline.rotate(pattern_angle);
+
     append(polylines_out, std::move(all_polylines));
     return polylines_out;
 }

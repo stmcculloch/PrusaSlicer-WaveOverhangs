@@ -18,6 +18,7 @@ public:
     ~FillAuxetic() override = default;
 
     Polylines fill_surface(const Surface *surface, const FillParams &params) override;
+    Polylines take_deferred_straights();
     bool is_self_crossing() override { return false; }
 
 private:
@@ -41,6 +42,7 @@ private:
 
     using Cache = std::map<CacheID, CacheData>;
     mutable Cache m_cache;
+    Polylines     m_deferred_straights;
 
 protected:
     float _layer_angle(size_t) const override { return 0.f; }
