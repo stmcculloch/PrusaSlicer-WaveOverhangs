@@ -2114,6 +2114,71 @@ void PrintObject::bridge_over_infill()
 
     // LAMBDA do determine optimal bridging angle
     auto determine_bridging_angle = [](const Polygons &bridged_area, const Lines &anchors, InfillPattern dominant_pattern) {
+        auto auxetic_angle_from_anchors = [](const Lines &anchor_lines) -> double {
+            struct WeightedPoint {
+                double x;
+                double y;
+                double w;
+            };
+
+            std::vector<WeightedPoint> samples;
+            samples.reserve(anchor_lines.size() * 3);
+            double total_weight = 0.;
+            for (const Line &line : anchor_lines) {
+                const double length = std::max(line.length(), 1.);
+                const Point  mid    = line.midpoint();
+                samples.push_back({ double(line.a.x()), double(line.a.y()), 0.25 * length });
+                samples.push_back({ double(mid.x()),    double(mid.y()),    0.50 * length });
+                samples.push_back({ double(line.b.x()), double(line.b.y()), 0.25 * length });
+                total_weight += length;
+            }
+
+            if (samples.empty() || total_weight <= 0.)
+                return 0.001;
+
+            double mean_x = 0.;
+            double mean_y = 0.;
+            for (const WeightedPoint &sample : samples) {
+                mean_x += sample.w * sample.x;
+                mean_y += sample.w * sample.y;
+            }
+            mean_x /= total_weight;
+            mean_y /= total_weight;
+
+            double cov_xx = 0.;
+            double cov_xy = 0.;
+            double cov_yy = 0.;
+            for (const WeightedPoint &sample : samples) {
+                const double dx = sample.x - mean_x;
+                const double dy = sample.y - mean_y;
+                cov_xx += sample.w * dx * dx;
+                cov_xy += sample.w * dx * dy;
+                cov_yy += sample.w * dy * dy;
+            }
+            cov_xx /= total_weight;
+            cov_xy /= total_weight;
+            cov_yy /= total_weight;
+
+            const double trace = cov_xx + cov_yy;
+            const double disc  = std::sqrt(std::max(0., (cov_xx - cov_yy) * (cov_xx - cov_yy) + 4. * cov_xy * cov_xy));
+            const double lambda = 0.5 * (trace + disc);
+
+            Vec2d principal;
+            if (std::abs(cov_xy) > 1e-9)
+                principal = Vec2d(lambda - cov_yy, cov_xy);
+            else
+                principal = cov_xx >= cov_yy ? Vec2d::UnitX() : Vec2d::UnitY();
+
+            if (principal.squaredNorm() < 1e-12)
+                return 0.001;
+
+            principal.normalize();
+            return std::atan2(principal.y(), principal.x()) + 0.5 * PI;
+        };
+
+        if (dominant_pattern == ipAuxetic && ! anchors.empty())
+            return auxetic_angle_from_anchors(anchors);
+
         AABBTreeLines::LinesDistancer<Line> lines_tree(anchors);
 
         std::map<double, int> counted_directions;
