@@ -1,0 +1,14 @@
+Ideas for future work: 
+
+- Adjust parameters to prevent warping on subsequent layers.
+-- bottom layers after wave overhangs (0)
+-- bottom layer density after wave overhangs (maybe if lines aren't touching = less warping?)
+-- bottom layer pattern after wave overhangs (maybe Hilbert curve is better?)
+-- infill % after wave overhangs?
+-- anti-warp infill above wave overhangs?
+-- perimeter print speed after wave overhangs
+-- randomly break up perimeter lines on top of wave overhangs to prevent warping
+
+
+Changes to make eventually:
+- Remove setting "Don't support wave overhangs" - redundant.
