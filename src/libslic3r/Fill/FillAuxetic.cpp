@@ -3,6 +3,7 @@
 ///|/ PrusaSlicer is released under the terms of the AGPLv3 or higher
 ///|/
 #include "FillAuxetic.hpp"
+#include "FillRectilinear.hpp"
 
 #include <array>
 #include <algorithm>
@@ -93,6 +94,23 @@ inline bool is_horizontal_edge(const Point &a, const Point &b)
 inline bool point_less_xy(const Point &lhs, const Point &rhs)
 {
     return lhs.x() < rhs.x() || (lhs.x() == rhs.x() && lhs.y() < rhs.y());
+}
+
+Polylines fallback_aligned_rectilinear(const Fill &source, const Surface *surface, const FillParams &params)
+{
+    FillAlignedRectilinear fallback;
+    fallback.layer_id            = source.layer_id;
+    fallback.z                   = source.z;
+    fallback.spacing             = source.spacing;
+    fallback.overlap             = source.overlap;
+    fallback.angle               = source.angle;
+    fallback.link_max_length     = source.link_max_length;
+    fallback.loop_clipping       = source.loop_clipping;
+    fallback.bounding_box        = source.bounding_box;
+    fallback.adapt_fill_octree   = source.adapt_fill_octree;
+    fallback.print_config        = source.print_config;
+    fallback.print_object_config = source.print_object_config;
+    return fallback.fill_surface(surface, params);
 }
 
 double recommended_transverse_angle_bias(const Points &positions, const std::vector<std::pair<size_t, size_t>> &edges)
@@ -385,6 +403,11 @@ Polylines FillAuxetic::fill_surface(const Surface *surface, const FillParams &pa
 
     const coord_t ref_x = surface_center.x();
     const coord_t ref_y = surface_center.y();
+
+    const int64_t column_count = std::max<int64_t>(0, int64_t(std::ceil(double(x_max - x_min) / double(cache.column_step))) + 1);
+    const int64_t row_count    = std::max<int64_t>(0, int64_t(std::ceil(double(y_max - y_min) / double(cache.row_step))) + 1);
+    if (column_count * row_count > 50000)
+        return fallback_aligned_rectilinear(*this, surface, params);
 
     Points positions;
     positions.reserve(1024);

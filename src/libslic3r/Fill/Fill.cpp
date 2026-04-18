@@ -172,7 +172,9 @@ std::vector<SurfaceFill> group_fills(const Layer &layer)
 		        FlowRole extrusion_role = surface.is_top() ? frTopSolidInfill : (surface.is_solid() ? frSolidInfill : frInfill);
 		        bool     is_bridge 	    = layer.id() > 0 && surface.is_bridge();
 		        params.extruder 	 = layerm.region().extruder(extrusion_role);
-		        params.pattern 		 = region_config.fill_pattern.value;
+		        params.pattern 		 = surface.fill_pattern_override >= 0 ?
+                    InfillPattern(surface.fill_pattern_override) :
+                    (region_config.fill_pattern.value == ipAuxetic ? ipAlignedRectilinear : region_config.fill_pattern.value);
 		        params.density       = float(region_config.fill_density);
 
 		        if (surface.is_solid()) {
@@ -180,7 +182,6 @@ std::vector<SurfaceFill> group_fills(const Layer &layer)
 					//FIXME for non-thick bridges, shall we allow a bottom surface pattern?
 		            params.pattern = (surface.is_external() && ! is_bridge) ? 
 						(surface.is_top() ? region_config.top_fill_pattern.value : region_config.bottom_fill_pattern.value) :
-                        (is_bridge && region_config.fill_pattern.value == ipAuxetic) ? ipAuxetic :
 		                fill_type_monotonic(region_config.top_fill_pattern) ? ipMonotonic : ipRectilinear;
 		        } else if (params.density <= 0)
 		            continue;
