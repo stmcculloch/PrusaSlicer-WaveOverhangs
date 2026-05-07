@@ -4,6 +4,11 @@
 set(SLIC3R_APP_NAME "PrusaSlicer")
 set(SLIC3R_APP_KEY "PrusaSlicer")
 set(SLIC3R_VERSION "2.9.4")
+# Wave-overhangs fork version. Keep "dev" on regular development builds;
+# release builds may override this with the tag version.
+if(NOT DEFINED WAVE_OVERHANGS_VERSION)
+    set(WAVE_OVERHANGS_VERSION "dev")
+endif()
 set(SLIC3R_BUILD_ID "PrusaSlicer-${SLIC3R_VERSION}+UNKNOWN")
 set(SLIC3R_RC_VERSION "2,9,4,0")
 set(SLIC3R_RC_VERSION_DOTS "2.9.4.0")

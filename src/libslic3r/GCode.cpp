@@ -51,6 +51,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <chrono>
+#include <cmath>
 #include <math.h>
 #include <optional>
 #include <string>
@@ -95,6 +96,10 @@ using namespace std::literals::string_view_literals;
 #undef NDEBUG
 #endif
 
+#ifndef WAVE_OVERHANGS_VERSION
+#define WAVE_OVERHANGS_VERSION "dev"
+#endif
+
 #include <assert.h>
 
 namespace Slic3r {
@@ -131,6 +136,95 @@ namespace Slic3r {
         NEXT:;
         }
         return ok;
+    }
+
+    static const char* wave_overhang_pattern_name(WaveOverhangPattern pattern)
+    {
+        switch (pattern) {
+        case WaveOverhangPattern::Monotonic: return "monotonic";
+        case WaveOverhangPattern::ZigZag:    return "zigzag";
+        case WaveOverhangPattern::Smart:
+        default:                             return "smart";
+        }
+    }
+
+    static Flow wave_overhang_debug_base_flow(const Print &print, const PrintObject &object, const PrintRegion &region, double layer_height)
+    {
+        const PrintRegionConfig &region_config = region.config();
+        return [&]() {
+            if (object.config().thick_bridges.value) {
+                const float nozzle_diameter = float(print.config().nozzle_diameter.get_at(region.extruder(frPerimeter) - 1));
+                return Flow::bridging_flow(float(std::sqrt(region_config.bridge_flow_ratio.value)) * nozzle_diameter, nozzle_diameter);
+            }
+            return region.flow(object, frPerimeter, layer_height).with_flow_ratio(region_config.bridge_flow_ratio.value);
+        }();
+    }
+
+    template <class OutputStream>
+    static void emit_wave_overhang_debug_header(const Print &print, OutputStream &file)
+    {
+        if (print.objects().empty())
+            return;
+
+        bool any_wave_overhangs = false;
+        for (size_t region_id = 0; region_id < print.num_print_regions(); ++region_id) {
+            if (print.get_print_region(region_id).config().wave_overhangs.value) {
+                any_wave_overhangs = true;
+                break;
+            }
+        }
+        if (! any_wave_overhangs)
+            return;
+
+        const PrintObject &first_object = *print.objects().front();
+        const double layer_height = first_object.config().layer_height.value;
+        file.write_format(
+            "; WAVE_OVERHANG_BUILD wave_overhangs_version=%s prusa_base=%s\n",
+            WAVE_OVERHANGS_VERSION, SLIC3R_VERSION);
+
+        for (size_t region_id = 0; region_id < print.num_print_regions(); ++region_id) {
+            const PrintRegion       &region = print.get_print_region(region_id);
+            const PrintRegionConfig &rc     = region.config();
+            if (! rc.wave_overhangs.value)
+                continue;
+
+            const Flow overhang_flow = wave_overhang_debug_base_flow(print, first_object, region, layer_height);
+            const Flow wave_flow = rc.wave_overhang_line_width.value > 0. ?
+                overhang_flow.with_width(float(rc.wave_overhang_line_width.value)) :
+                overhang_flow;
+            const double wave_spacing = rc.wave_overhang_line_spacing.value > 0. ?
+                rc.wave_overhang_line_spacing.value : overhang_flow.spacing();
+            const double flow_mm3_per_mm = wave_flow.mm3_per_mm() * rc.wave_overhang_flow_ratio.value;
+            const std::string infill_pattern = rc.fill_pattern.serialize();
+
+            file.write_format(
+                "; WAVE_OVERHANG_CONFIG region=%zu algo=andersons outer_perim=%d"
+                " spacing=%.3f flow_mm3_per_mm=%.3f speed=%.1f travel=%.1f fan=%d"
+                " floor_layers=0 min_angle=0.0 min_length=0.00 max_iterations=0"
+                " ring_overlap=0.15 pattern=%s spacing_mode=uniform seam_mode=alternating"
+                " perimeter_overlap=%.2f minimum_wave_width=%.2f min_new_area=0.0100"
+                " nozzle_temp_override=0 min_wave_time=0.00 min_layer_time=0.00"
+                " wall_loops=%d top_shell_layers=%d bottom_shell_layers=%d"
+                " infill_density=%.0f infill_pattern=%s"
+                " support_remainder=%d instead_of_bridges=%d\n",
+                region_id,
+                rc.wave_overhang_outer_perimeters.value,
+                wave_spacing,
+                flow_mm3_per_mm,
+                rc.wave_overhang_print_speed.value,
+                rc.wave_overhang_travel_speed.value,
+                print.config().wave_overhang_fan_speed.value,
+                wave_overhang_pattern_name(rc.wave_overhang_pattern.value),
+                rc.wave_overhang_perimeter_overlap.value,
+                rc.wave_overhang_minimum_width.value,
+                rc.perimeters.value,
+                rc.top_solid_layers.value,
+                rc.bottom_solid_layers.value,
+                rc.fill_density.value,
+                infill_pattern.c_str(),
+                first_object.config().support_remaining_areas_after_wave_overhangs.value ? 1 : 0,
+                rc.wave_overhangs_instead_of_bridges.value ? 1 : 0);
+        }
     }
 
     std::string OozePrevention::pre_toolchange(GCodeGenerator &gcodegen)
@@ -1041,6 +1135,7 @@ void GCodeGenerator::_do_export(Print& print, GCodeOutputStream &file, Thumbnail
     if (!export_to_binary_gcode) {
         // Write information on the generator.
         file.write_format("; %s\n", Slic3r::header_slic3r_generated().c_str());
+        emit_wave_overhang_debug_header(print, file);
         if (! prepared_by_info.empty())
             file.write_format("; prepared by %s\n", prepared_by_info.c_str());
         file.write_format("\n");
